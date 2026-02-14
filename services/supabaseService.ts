@@ -1,22 +1,26 @@
-
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Question, AccessCode } from '../types';
 import { SchulhundModuleType } from '../App';
 
 // ===================================================================================
-// Liest die Supabase-Zugangsdaten aus den Umgebungsvariablen,
-// die in Vercel oder einer lokalen .env-Datei bereitgestellt werden.
+// Liest die Supabase-Zugangsdaten aus den Umgebungsvariablen (Vite: import.meta.env).
+// Wichtig: import.meta.env existiert nur in einer echten Vite-Umgebung.
 // ===================================================================================
-export const SUPABASE_URL = process.env.VITE_SUPABASE_URL!; 
-export const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY!;
+const ENV = (import.meta as any)?.env ?? {};
 
+export const SUPABASE_URL: string = ENV.VITE_SUPABASE_URL ?? '';
+export const SUPABASE_KEY: string = ENV.VITE_SUPABASE_ANON_KEY ?? '';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("Supabase URL und Key sind nicht konfiguriert. Stellen Sie sicher, dass VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in den Vercel Environment Variables gesetzt sind.");
-  // Wir werfen hier keinen Fehler, damit die App nicht abstürzt, aber die Konsole wird eine klare Meldung anzeigen.
+  console.error(
+    'Supabase URL/Key sind nicht konfiguriert. Setze VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in Vercel (Environment Variables) und deploye neu.'
+  );
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Supabase-Client nur erstellen, wenn URL & Key vorhanden sind (sonst null, damit die App nicht sofort abstürzt).
+const supabase: SupabaseClient | null = (SUPABASE_URL && SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
 
 /**
  * Speichert ein Array von Fragen in der Supabase-Datenbank.
@@ -52,151 +56,159 @@ export const fetchRandomQuestions = async (count: number, schulhundModule: Schul
       // Schließe die spezielle Kategorie aus
       query = query.not('category', 'eq', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
     } else if (schulhundModule === 'schulhund') {
-      // Wähle NUR die spezielle Kategorie aus
+      // Nimm nur die spezielle Kategorie
       query = query.eq('category', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
     }
-
+    
+    // Supabase hat keine direkte random() Funktion in der JS-API.
+    // Wir holen mehr Fragen als nötig und mischen sie clientseitig.
     const { data, error } = await query;
 
     if (error) {
-        console.error('Fehler beim Abrufen der Fragen aus Supabase:', error);
-        throw new Error('Fragen konnten nicht aus der Datenbank geladen werden.');
+        console.error('Fehler beim Abrufen der Fragen von Supabase:', error);
+        throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
     }
 
-    if (!data || data.length === 0) {
-        throw new Error(`Keine Fragen in der Datenbank gefunden, die den Kriterien entsprechen.`);
-    }
-    
-    // Mische das Array und wähle die ersten 'count' Elemente aus.
+    // Clientseitig mischen und die gewünschte Anzahl zurückgeben
     const shuffled = data.sort(() => 0.5 - Math.random());
     return shuffled.slice(0, count) as Question[];
 };
 
+
 /**
- * Holt alle Fragen aus der Datenbank.
+ * Holt Fragen basierend auf einer Kategorie aus der Supabase-Datenbank.
+ * @param category Die Kategorie der Fragen.
+ * @returns Ein Promise, das zu einem Array von Question-Objekten aufgelöst wird.
+ */
+export const fetchQuestionsByCategory = async (category: string): Promise<Question[]> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+  const { data, error } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('category', category);
+
+  if (error) {
+    console.error('Fehler beim Abrufen der Fragen von Supabase:', error);
+    throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
+  }
+
+  return data as Question[];
+};
+
+
+/**
+ * Holt alle Kategorien aus der Supabase-Datenbank.
+ * @returns Ein Promise, das zu einem Array von Kategorie-Strings aufgelöst wird.
+ */
+export const fetchCategories = async (): Promise<string[]> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+  const { data, error } = await supabase
+    .from('questions')
+    .select('category');
+
+  if (error) {
+    console.error('Fehler beim Abrufen der Kategorien von Supabase:', error);
+    throw new Error('Kategorien konnten nicht von der Datenbank geladen werden.');
+  }
+
+  // Duplikate entfernen
+  const categories = [...new Set(data.map(item => item.category))].filter(Boolean);
+  return categories;
+};
+
+
+/**
+ * Löscht alle Fragen aus der Supabase-Datenbank.
+ */
+export const deleteAllQuestions = async (): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+  const { error } = await supabase
+    .from('questions')
+    .delete()
+    .neq('id', 0); // Löscht alle Zeilen
+
+  if (error) {
+    console.error('Fehler beim Löschen der Fragen in Supabase:', error);
+    throw new Error('Fragen konnten nicht aus der Datenbank gelöscht werden.');
+  }
+};
+
+/**
+ * Holt alle Fragen aus der Supabase-Datenbank.
+ * @returns Ein Promise, das zu einem Array von Question-Objekten aufgelöst wird.
  */
 export const fetchAllQuestions = async (): Promise<Question[]> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .order('id', { ascending: true });
+  const { data, error } = await supabase
+    .from('questions')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Fehler beim Abrufen aller Fragen:', error);
-        throw new Error('Fragen konnten nicht geladen werden.');
-    }
-    return data as Question[];
+  if (error) {
+    console.error('Fehler beim Abrufen aller Fragen von Supabase:', error);
+    throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
+  }
+
+  return data as Question[];
 };
 
 /**
- * Erstellt eine neue Frage in der Datenbank.
+ * Löscht eine einzelne Frage aus der Supabase-Datenbank.
+ * @param id Die ID der zu löschenden Frage.
  */
-export const createQuestion = async (question: Omit<Question, 'id' | 'created_at'>): Promise<Question> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const deleteQuestion = async (id: string): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('questions')
-        .insert([question])
-        .select()
-        .single();
+  const { error } = await supabase
+    .from('questions')
+    .delete()
+    .eq('id', id);
 
-    if (error) {
-        console.error('Fehler beim Erstellen der Frage:', error);
-        throw new Error('Frage konnte nicht erstellt werden.');
-    }
-    return data as Question;
-};
-
-
-/**
- * Aktualisiert eine bestehende Frage in der Datenbank.
- */
-export const updateQuestion = async (question: Question): Promise<Question> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-    if (!question.id) throw new Error("Frage benötigt eine ID zum Aktualisieren.");
-
-    const { id, created_at, ...updateData } = question;
-
-    const { data, error } = await supabase
-        .from('questions')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-    
-    if (error) {
-        console.error('Fehler beim Aktualisieren der Frage:', error);
-        throw new Error('Frage konnte nicht aktualisiert werden.');
-    }
-    return data as Question;
+  if (error) {
+    console.error('Fehler beim Löschen der Frage in Supabase:', error);
+    throw new Error('Die Frage konnte nicht gelöscht werden.');
+  }
 };
 
 /**
- * Löscht eine Frage aus der Datenbank.
+ * Aktualisiert eine einzelne Frage in der Supabase-Datenbank.
+ * @param id Die ID der zu aktualisierenden Frage.
+ * @param updates Ein Objekt mit den zu aktualisierenden Feldern.
  */
-export const deleteQuestion = async (id: number): Promise<void> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const updateQuestion = async (id: string, updates: Partial<Question>): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', id)
-        .select();
+  const { error } = await supabase
+    .from('questions')
+    .update(updates)
+    .eq('id', id);
 
-    if (error) {
-        console.error('Fehler beim Löschen der Frage:', error);
-        throw new Error('Frage konnte nicht gelöscht werden.');
-    }
-
-    // Wenn RLS den Löschvorgang verhindert, ist der Fehler 'null', aber es werden keine Daten zurückgegeben.
-    // Wir prüfen, ob der Löschvorgang tatsächlich erfolgreich war.
-    if (!data || data.length === 0) {
-      console.error('Löschen der Frage fehlgeschlagen: Zeile nicht gefunden oder keine Berechtigung.');
-      throw new Error('Frage konnte nicht gelöscht werden. Möglicherweise fehlt die Berechtigung oder die Frage existiert nicht mehr.');
-    }
+  if (error) {
+    console.error('Fehler beim Aktualisieren der Frage in Supabase:', error);
+    throw new Error('Die Frage konnte nicht aktualisiert werden.');
+  }
 };
 
 /**
- * Löscht mehrere Fragen auf einmal aus der Datenbank.
- * @param ids Ein Array von IDs der zu löschenden Fragen.
+ * Überprüft einen Zugangscode.
+ * @param code Der zu überprüfende Zugangscode.
+ * @returns Ein Promise, das zu einem boolean aufgelöst wird.
  */
-export const deleteMultipleQuestions = async (ids: number[]): Promise<void> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-    if (ids.length === 0) return;
-
-    const { error } = await supabase
-        .from('questions')
-        .delete()
-        .in('id', ids);
-
-    if (error) {
-        console.error('Fehler beim Löschen mehrerer Fragen:', error);
-        throw new Error('Die ausgewählten Fragen konnten nicht gelöscht werden.');
-    }
-};
-
-
-// === ACCESS CODE FUNCTIONS ===
-
-/**
- * Validiert, ob ein Zugangscode existiert und aktiv ist.
- * @param code Der zu validierende Zugangscode.
- * @returns Ein Promise, das bei Gültigkeit zu true, andernfalls zu false aufgelöst wird.
- */
-export const validateAccessCode = async (code: string): Promise<boolean> => {
+export const verifyAccessCode = async (code: string): Promise<boolean> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
   const { data, error } = await supabase
     .from('access_codes')
-    .select('id')
+    .select('*')
     .eq('code', code)
-    .eq('is_active', true)
     .single();
 
-  if (error && error.code !== 'PGRST116') { // PGRST116: "Query returned no rows", was für ungültige Codes erwartet wird
-    console.error('Fehler bei der Validierung des Zugangscodes:', error);
+  if (error) {
+    console.error('Fehler beim Überprüfen des Zugangscodes:', error);
     return false;
   }
 
@@ -204,125 +216,78 @@ export const validateAccessCode = async (code: string): Promise<boolean> => {
 };
 
 /**
- * Holt alle Zugangscodes aus der Datenbank.
+ * Holt alle Zugangscodes aus der Supabase-Datenbank.
+ * @returns Ein Promise, das zu einem Array von AccessCode-Objekten aufgelöst wird.
  */
-export const fetchAllAccessCodes = async (): Promise<AccessCode[]> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const fetchAccessCodes = async (): Promise<AccessCode[]> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('access_codes')
-        .select('*')
-        .order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('access_codes')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Fehler beim Abrufen aller Zugangscodes:', error);
-        throw new Error('Zugangscodes konnten nicht geladen werden.');
-    }
-    return data as AccessCode[];
+  if (error) {
+    console.error('Fehler beim Abrufen der Zugangscodes:', error);
+    throw new Error('Zugangscodes konnten nicht von der Datenbank geladen werden.');
+  }
+
+  return data as AccessCode[];
 };
 
 /**
- * Erstellt einen neuen Zugangscode in der Datenbank.
+ * Speichert einen neuen Zugangscode in der Supabase-Datenbank.
+ * @param code Der zu speichernde Zugangscode.
  */
-export const createAccessCode = async (code: string, studentName?: string | null): Promise<AccessCode> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const saveAccessCode = async (code: string): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('access_codes')
-        .insert([{ code, student_name: studentName, is_active: true }])
-        .select()
-        .single();
+  const { error } = await supabase
+    .from('access_codes')
+    .insert([{ code }]);
 
-    if (error) {
-        console.error('Fehler beim Erstellen des Zugangscodes:', error);
-        throw new Error('Zugangscode konnte nicht erstellt werden.');
-    }
-    return data as AccessCode;
+  if (error) {
+    console.error('Fehler beim Speichern des Zugangscodes in Supabase:', error);
+    throw new Error('Zugangscode konnte nicht gespeichert werden.');
+  }
 };
 
 /**
- * Aktualisiert einen bestehenden Zugangscode (z.B. den Aktivierungsstatus oder den Namen).
+ * Löscht einen Zugangscode aus der Supabase-Datenbank.
+ * @param id Die ID des zu löschenden Zugangscodes.
  */
-export const updateAccessCode = async (id: number, updates: Partial<Omit<AccessCode, 'id' | 'created_at' | 'code'>>): Promise<AccessCode> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const deleteAccessCode = async (id: string): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    const { data, error } = await supabase
-        .from('access_codes')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+  const { error } = await supabase
+    .from('access_codes')
+    .delete()
+    .eq('id', id);
 
-    if (error) {
-        console.error('Fehler beim Aktualisieren des Zugangscodes:', error);
-        throw new Error('Zugangscode konnte nicht aktualisiert werden.');
-    }
-    return data as AccessCode;
+  if (error) {
+    console.error('Fehler beim Löschen des Zugangscodes in Supabase:', error);
+    throw new Error('Zugangscode konnte nicht gelöscht werden.');
+  }
 };
 
 /**
- * Löscht einen Zugangscode aus der Datenbank.
+ * Überprüft, ob eine E-Mail-Adresse ein Admin ist.
+ * @param email Die zu überprüfende E-Mail-Adresse.
+ * @returns Ein Promise, das zu einem boolean aufgelöst wird.
  */
-export const deleteAccessCode = async (id: number): Promise<void> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-    const { error } = await supabase
-        .from('access_codes')
-        .delete()
-        .eq('id', id);
-
-    if (error) {
-        console.error('Fehler beim Löschen des Zugangscodes:', error);
-        throw new Error('Zugangscode konnte nicht gelöscht werden.');
-    }
-};
-
-// === ADMIN AUTHENTICATION ===
-
-/**
- * Validiert die Anmeldeinformationen des Administrators gegen die Datenbank.
- * @param username Der vom Administrator eingegebene Benutzername.
- * @param password Das vom Administrator eingegebene Passwort.
- * @returns Ein Promise, das bei Gültigkeit zu true, andernfalls zu false aufgelöst wird.
- */
-export const validateAdminCredentials = async (username: string, password: string): Promise<boolean> => {
+export const isAdmin = async (email: string): Promise<boolean> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
   const { data, error } = await supabase
     .from('admin_users')
-    .select('id')
-    .eq('username', username)
-    .eq('password', password) // Direkter Vergleich. Für Produktionsumgebungen wird Hashing empfohlen.
+    .select('email')
+    .eq('email', email)
     .single();
 
-  if (error && error.code !== 'PGRST116') { // Ignoriere "no rows" Fehler
-    console.error('Fehler bei der Admin-Validierung:', error);
+  if (error) {
+    console.error('Fehler beim Überprüfen des Admin-Status:', error);
     return false;
   }
 
   return !!data;
-};
-
-
-// === LEARNING MATERIALS ===
-
-/**
- * Lädt den Studienleitfaden (PDF) in den Supabase Storage hoch.
- * Überschreibt eine vorhandene Datei, um sicherzustellen, dass immer nur die neueste Version verfügbar ist.
- * @param file Die PDF-Datei, die hochgeladen werden soll.
- */
-export const uploadLearningGuide = async (file: File): Promise<void> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const { data, error } = await supabase.storage
-    .from('learning_materials')
-    .upload('studienleitfaden.pdf', file, {
-      cacheControl: '3600',
-      upsert: true, // Überschreibt die Datei, falls sie bereits existiert
-    });
-
-  if (error) {
-    console.error('Fehler beim Hochladen des Studienleitfadens:', error);
-    throw new Error('Der Studienleitfaden konnte nicht hochgeladen werden.');
-  }
 };
