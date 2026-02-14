@@ -46,32 +46,27 @@ export const saveQuestions = async (questions: Omit<Question, 'id' | 'created_at
  * @returns Ein Promise, das zu einem Array von Question-Objekten aufgelöst wird.
  */
 export const fetchRandomQuestions = async (count: number, schulhundModule: SchulhundModuleType): Promise<Question[]> => {
-    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    let query = supabase
-        .from('questions')
-        .select('*');
+  let query = supabase
+    .from('questions')
+    .select('*');
 
-    if (schulhundModule === 'hundefuehrerschein') {
-      // Schließe die spezielle Kategorie aus
-      query = query.not('category', 'eq', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
-    } else if (schulhundModule === 'schulhund') {
-      // Nimm nur die spezielle Kategorie
-      query = query.eq('category', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
-    }
-    
-    // Supabase hat keine direkte random() Funktion in der JS-API.
-    // Wir holen mehr Fragen als nötig und mischen sie clientseitig.
-    const { data, error } = await query;
+  if (schulhundModule === 'hundefuehrerschein') {
+    query = query.not('category', 'eq', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
+  } else if (schulhundModule === 'schulhund') {
+    query = query.eq('category', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
+  }
 
-    if (error) {
-        console.error('Fehler beim Abrufen der Fragen von Supabase:', error);
-        throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
-    }
+  const { data, error } = await query;
 
-    // Clientseitig mischen und die gewünschte Anzahl zurückgeben
-    const shuffled = data.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count) as Question[];
+  if (error) {
+    console.error('Fehler beim Abrufen der Fragen von Supabase:', error);
+    throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
+  }
+
+  const shuffled = (data ?? []).sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count) as Question[];
 };
 
 
@@ -93,7 +88,7 @@ export const fetchQuestionsByCategory = async (category: string): Promise<Questi
     throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
   }
 
-  return data as Question[];
+  return (data ?? []) as Question[];
 };
 
 
@@ -113,8 +108,7 @@ export const fetchCategories = async (): Promise<string[]> => {
     throw new Error('Kategorien konnten nicht von der Datenbank geladen werden.');
   }
 
-  // Duplikate entfernen
-  const categories = [...new Set(data.map(item => item.category))].filter(Boolean);
+  const categories = [...new Set((data ?? []).map((item: any) => item.category))].filter(Boolean);
   return categories;
 };
 
@@ -128,7 +122,7 @@ export const deleteAllQuestions = async (): Promise<void> => {
   const { error } = await supabase
     .from('questions')
     .delete()
-    .neq('id', 0); // Löscht alle Zeilen
+    .neq('id', 0);
 
   if (error) {
     console.error('Fehler beim Löschen der Fragen in Supabase:', error);
@@ -153,7 +147,7 @@ export const fetchAllQuestions = async (): Promise<Question[]> => {
     throw new Error('Fragen konnten nicht von der Datenbank geladen werden.');
   }
 
-  return data as Question[];
+  return (data ?? []) as Question[];
 };
 
 /**
@@ -216,6 +210,14 @@ export const verifyAccessCode = async (code: string): Promise<boolean> => {
 };
 
 /**
+ * Alias für ältere Komponenten/Imports:
+ * components/Login.tsx importiert validateAccessCode.
+ */
+export const validateAccessCode = async (code: string): Promise<boolean> => {
+  return verifyAccessCode(code);
+};
+
+/**
  * Holt alle Zugangscodes aus der Supabase-Datenbank.
  * @returns Ein Promise, das zu einem Array von AccessCode-Objekten aufgelöst wird.
  */
@@ -232,7 +234,7 @@ export const fetchAccessCodes = async (): Promise<AccessCode[]> => {
     throw new Error('Zugangscodes konnten nicht von der Datenbank geladen werden.');
   }
 
-  return data as AccessCode[];
+  return (data ?? []) as AccessCode[];
 };
 
 /**
