@@ -4,16 +4,15 @@ import { Question, AccessCode } from '../types';
 import { SchulhundModuleType } from '../App';
 
 // ===================================================================================
-// WICHTIGER HINWEIS: Ersetzen Sie die folgenden zwei Zeilen durch Ihre
-// tatsächlichen Supabase-Projektdaten. Sie finden diese in Ihrem Supabase-Dashboard
-// unter "Project Settings" -> "API".
+// Liest die Supabase-Zugangsdaten aus den Umgebungsvariablen,
+// die in Vercel oder einer lokalen .env-Datei bereitgestellt werden.
 // ===================================================================================
-export const SUPABASE_URL = 'https://prfvdhjbyhvpovusdlzk.supabase.co'; // <-- HIER IHRE URL EINFÜGEN
-export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByZnZkaGpieWh2cG92dXNkbHprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NzU1NzMsImV4cCI6MjA4NjU1MTU3M30.bW07S4k8t0J4Gr0R5Zbe3BZpEmNL0a_CSaZGfTMeaZY'; // <-- HIER IHREN PUBLIC ANON KEY EINFÜGEN
+export const SUPABASE_URL = process.env.VITE_SUPABASE_URL!; 
+export const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY!;
 
 
-if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes('IHRE_SUPABASE_URL')) {
-  console.error("Supabase URL und Key sind nicht konfiguriert. Bitte ersetzen Sie die Platzhalter in services/supabaseService.ts.");
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("Supabase URL und Key sind nicht konfiguriert. Stellen Sie sicher, dass VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in den Vercel Environment Variables gesetzt sind.");
   // Wir werfen hier keinen Fehler, damit die App nicht abstürzt, aber die Konsole wird eine klare Meldung anzeigen.
 }
 
