@@ -1,7 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Question, AccessCode } from '../types';
-import { SchulhundModuleType } from '../App';
 
 // ===================================================================================
 // WICHTIGER HINWEIS: Ersetzen Sie die folgenden zwei Zeilen durch Ihre
@@ -42,22 +41,12 @@ export const saveQuestions = async (questions: Omit<Question, 'id' | 'created_at
  * @param count Die Anzahl der zufälligen Fragen, die abgerufen werden sollen.
  * @returns Ein Promise, das zu einem Array von Question-Objekten aufgelöst wird.
  */
-export const fetchRandomQuestions = async (count: number, schulhundModule: SchulhundModuleType): Promise<Question[]> => {
+export const fetchRandomQuestions = async (count: number): Promise<Question[]> => {
     if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-    let query = supabase
+    const { data, error } = await supabase
         .from('questions')
         .select('*');
-
-    if (schulhundModule === 'hundefuehrerschein') {
-      // Schließe die spezielle Kategorie aus
-      query = query.not('category', 'eq', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
-    } else if (schulhundModule === 'schulhund') {
-      // Wähle NUR die spezielle Kategorie aus
-      query = query.eq('category', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
-    }
-
-    const { data, error } = await query;
 
     if (error) {
         console.error('Fehler beim Abrufen der Fragen aus Supabase:', error);
