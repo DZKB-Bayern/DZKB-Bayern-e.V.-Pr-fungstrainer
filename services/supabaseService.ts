@@ -1,4 +1,3 @@
-// services/supabaseService.ts – FINAL FIX
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Question, AccessCode } from '../types';
 import { SchulhundModuleType } from '../App';
@@ -17,6 +16,10 @@ const requireSupabase = (): SupabaseClient => {
   }
   return supabase;
 };
+
+// ======================================================
+// LOGIN / ACCESS CODES
+// ======================================================
 
 export const validateAccessCode = async (code: string): Promise<boolean> => {
   const { data, error } = await requireSupabase()
@@ -44,11 +47,14 @@ export const validateAdminCredentials = async (
   return !!data;
 };
 
-export const saveQuestions = async (questions: Omit<Question, 'id' | 'created_at'>[]): Promise<void> => {
-  const { error } = await requireSupabase()
-    .from('questions')
-    .insert(questions);
+// ======================================================
+// QUESTIONS
+// ======================================================
 
+export const saveQuestions = async (
+  questions: Omit<Question, 'id' | 'created_at'>[]
+): Promise<void> => {
+  const { error } = await requireSupabase().from('questions').insert(questions);
   if (error) throw error;
 };
 
@@ -59,18 +65,29 @@ export const fetchRandomQuestions = async (
   let query = requireSupabase().from('questions').select('*');
 
   if (schulhundModule === 'hundefuehrerschein') {
-    query = query.not('category', 'eq', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
+    query = query.not(
+      'category',
+      'eq',
+      'Spezialthema: Schul-, Therapie- und Besuchshunde'
+    );
   } else if (schulhundModule === 'schulhund') {
-    query = query.eq('category', 'Spezialthema: Schul-, Therapie- und Besuchshunde');
+    query = query.eq(
+      'category',
+      'Spezialthema: Schul-, Therapie- und Besuchshunde'
+    );
   }
 
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).sort(() => 0.5 - Math.random()).slice(0, count) as Question[];
+  return (data ?? [])
+    .sort(() => 0.5 - Math.random())
+    .slice(0, count) as Question[];
 };
 
-export const fetchQuestionsByCategory = async (category: string): Promise<Question[]> => {
+export const fetchQuestionsByCategory = async (
+  category: string
+): Promise<Question[]> => {
   const { data, error } = await requireSupabase()
     .from('questions')
     .select('*')
@@ -86,7 +103,7 @@ export const fetchCategories = async (): Promise<string[]> => {
     .select('category');
 
   if (error) throw error;
-  return [...new Set((data ?? []).map((d: any) => d.category))];
+  return [...new Set((data ?? []).map((d: any) => d.category))].filter(Boolean);
 };
 
 export const fetchAllQuestions = async (): Promise<Question[]> => {
@@ -108,7 +125,10 @@ export const deleteQuestion = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
-export const updateQuestion = async (id: string, updates: Partial<Question>): Promise<void> => {
+export const updateQuestion = async (
+  id: string,
+  updates: Partial<Question>
+): Promise<void> => {
   const { error } = await requireSupabase()
     .from('questions')
     .update(updates)
@@ -117,7 +137,16 @@ export const updateQuestion = async (id: string, updates: Partial<Question>): Pr
   if (error) throw error;
 };
 
-export const fetchAccessCodes = async (): Promise<AccessCode[]> => {
+// ======================================================
+// ACCESS CODE MANAGER (wichtig für AccessCodeManager.tsx)
+// ======================================================
+
+/**
+ * AccessCodeManager.tsx erwartet diese Exporte:
+ * fetchAllAccessCodes, createAccessCode, updateAccessCode, deleteAccessCode
+ */
+
+export const fetchAllAccessCodes = async (): Promise<AccessCode[]> => {
   const { data, error } = await requireSupabase()
     .from('access_codes')
     .select('*')
@@ -127,12 +156,32 @@ export const fetchAccessCodes = async (): Promise<AccessCode[]> => {
   return (data ?? []) as AccessCode[];
 };
 
-export const saveAccessCode = async (code: string): Promise<void> => {
-  const { error } = await requireSupabase()
+export const createAccessCode = async (
+  newCode: Omit<AccessCode, 'id' | 'created_at'> | { code: string; is_active?: boolean }
+): Promise<AccessCode> => {
+  const { data, error } = await requireSupabase()
     .from('access_codes')
-    .insert([{ code }]);
+    .insert([newCode as any])
+    .select('*')
+    .single();
 
   if (error) throw error;
+  return data as AccessCode;
+};
+
+export const updateAccessCode = async (
+  id: string,
+  updates: Partial<AccessCode>
+): Promise<AccessCode> => {
+  const { data, error } = await requireSupabase()
+    .from('access_codes')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as AccessCode;
 };
 
 export const deleteAccessCode = async (id: string): Promise<void> => {
@@ -143,6 +192,10 @@ export const deleteAccessCode = async (id: string): Promise<void> => {
 
   if (error) throw error;
 };
+
+// ======================================================
+// ADMIN CHECK (falls genutzt)
+// ======================================================
 
 export const isAdmin = async (email: string): Promise<boolean> => {
   const { data, error } = await requireSupabase()
