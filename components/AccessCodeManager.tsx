@@ -57,14 +57,27 @@ const AccessCodeManager: React.FC = () => {
   };
 
   const handleToggleStatus = async (codeToUpdate: AccessCode) => {
+    // FIX: Refactored to correctly implement optimistic UI update with proper error handling.
+    // The UI is updated immediately for responsiveness.
+    setCodes(prev =>
+      prev.map(c =>
+        c.id === codeToUpdate.id ? { ...c, is_active: !c.is_active } : c,
+      ),
+    );
+
     try {
-      const updatedCode = await updateAccessCode(codeToUpdate.id, { is_active: !codeToUpdate.is_active });
-      setCodes(prev => prev.map(c => (c.id === updatedCode.id ? updatedCode : c)));
+      await updateAccessCode(codeToUpdate.id, { is_active: !codeToUpdate.is_active });
       setError(null);
-    } catch (err: any)      {
+    } catch (err: any) {
       setError(err.message || 'Fehler beim Aktualisieren des Status.');
-      // Revert UI change on error
-      setCodes(prev => prev.map(c => (c.id === codeToUpdate.id ? { ...c, is_active: !c.is_active } : c)));
+      // If the API call fails, revert the UI change to reflect the actual state.
+      setCodes(prev =>
+        prev.map(c =>
+          c.id === codeToUpdate.id
+            ? { ...c, is_active: codeToUpdate.is_active }
+            : c,
+        ),
+      );
     }
   };
 

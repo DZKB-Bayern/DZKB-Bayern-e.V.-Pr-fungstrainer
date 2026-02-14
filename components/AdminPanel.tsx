@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { structureAndExtractQuestions } from '../services/geminiService';
 import { saveQuestions, fetchAllQuestions, deleteQuestion, updateQuestion, createQuestion, deleteMultipleQuestions, uploadLearningGuide } from '../services/supabaseService';
 import { Question } from '../types';
 import { Verband } from '../App';
 import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
-import * as pdfjs from 'pdfjs-dist';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ImageIcon from './icons/ImageIcon';
 import AccessCodeManager from './AccessCodeManager';
 import KeyIcon from './icons/KeyIcon';
 import QuestionMarkIcon from './icons/QuestionMarkIcon';
-
-
-// Configure the PDF.js worker to enable client-side PDF processing.
-pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.4.178/build/pdf.worker.mjs`;
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -65,9 +58,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   // State for file import
   const [file, setFile] = useState<File | null>(null);
   const [uploadVerband, setUploadVerband] = useState<Verband | ''>('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [analysisStatusMessage, setAnalysisStatusMessage] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   
   // State for question management
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
@@ -132,121 +123,70 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     }
   };
 
-  const handleAnalyzeAndImport = useCallback(async () => {
+  const handleImportCSV = useCallback(async () => {
     if (!file || !uploadVerband) return;
 
-    setAnalyzing(true);
+    const fileName = file.name.toLowerCase();
+    if (file.type !== 'text/csv' && !fileName.endsWith('.csv')) {
+        setError("Bitte wählen Sie eine gültige CSV-Datei aus. Andere Dateitypen werden nicht mehr unterstützt.");
+        setFile(null);
+        return;
+    }
+
+    setIsImporting(true);
     setError(null);
     setSuccessMessage(null);
-    setAnalysisProgress(0);
 
     try {
-        setAnalysisProgress(5);
+        const textContent = await file.text();
+        const cleanText = textContent.startsWith('\ufeff') ? textContent.substring(1) : textContent;
         
-        let allParsedQuestions: Omit<Question, 'id' | 'created_at'>[] = [];
-        const fileName = file.name.toLowerCase();
-        const isCsv = file.type === 'text/csv' || fileName.endsWith('.csv');
+        const workbook = XLSX.read(cleanText, { type: 'string' });
+        const sheetName = workbook.SheetNames[0];
+        const jsonData = XLSX.utils.sheet_to_json<any>(workbook.Sheets[sheetName]);
 
-        if (isCsv) {
-            setAnalysisStatusMessage('Verarbeite CSV-Datei...');
-            const textContent = await file.text();
-            const cleanText = textContent.startsWith('\ufeff') ? textContent.substring(1) : textContent;
-            
-            const workbook = XLSX.read(cleanText, { type: 'string' });
-            const sheetName = workbook.SheetNames[0];
-            const jsonData = XLSX.utils.sheet_to_json<any>(workbook.Sheets[sheetName]);
+        const allParsedQuestions: Omit<Question, 'id' | 'created_at'>[] = [];
 
-            for (const row of jsonData) {
-                const questionText = normalizeText(row['Frage']);
-                if (!questionText) continue;
+        for (const row of jsonData) {
+            const questionText = normalizeText(row['Frage']);
+            if (!questionText) continue;
 
-                const options: string[] = [];
-                for (let i = 1; i <= 8; i++) {
-                    const answer = row[`Antwort ${i}`];
-                    if (answer && String(answer).trim()) {
-                        options.push(normalizeText(String(answer)));
-                    }
+            const options: string[] = [];
+            for (let i = 1; i <= 8; i++) {
+                const answer = row[`Antwort ${i}`];
+                if (answer && String(answer).trim()) {
+                    options.push(normalizeText(String(answer)));
                 }
+            }
 
-                if (options.length === 0) continue;
+            if (options.length === 0) continue;
 
-                const correctAnswerIndices: number[] = [];
-                for (let i = 1; i <= options.length; i++) {
-                     if (String(row[`Antwort ${i} korrekt`]).toLowerCase() === 'richtig') {
-                        correctAnswerIndices.push(i - 1);
-                    }
+            const correctAnswerIndices: number[] = [];
+            for (let i = 1; i <= options.length; i++) {
+                 if (String(row[`Antwort ${i} korrekt`]).toLowerCase() === 'richtig') {
+                    correctAnswerIndices.push(i - 1);
                 }
-
-                if (correctAnswerIndices.length === 0) continue;
-
-                const question: Omit<Question, 'id' | 'created_at'> = {
-                    questionText,
-                    options,
-                    correctAnswerIndices,
-                    category: normalizeText(row['Kategorie'] || 'Allgemein'),
-                    type: String(row['Fragetyp']).startsWith('Single') ? 'Single' : 'Multi',
-                    verband: uploadVerband,
-                };
-                allParsedQuestions.push(question);
             }
-             setAnalysisProgress(90);
-        } else {
-            setAnalysisStatusMessage('Datei wird gelesen...');
-            let textContent = '';
-            const fileType = file.type;
 
-            if (fileType === 'text/plain') {
-                textContent = await file.text();
-            } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjs.getDocument(arrayBuffer).promise;
-                textContent = (await Promise.all(Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1).then(page => page.getTextContent()))))
-                    .map(content => content.items.map((item: any) => item.str).join(' ')).join('\n\n');
-            } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx')) {
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.extractRawText({ arrayBuffer });
-                textContent = result.value;
-            } else if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || fileName.endsWith('.xlsx')) {
-                const arrayBuffer = await file.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                textContent = workbook.SheetNames.map(sheetName => XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName])).join('\n');
-            } else {
-                throw new Error(`Dateityp wird nicht unterstützt. Bitte TXT, CSV, PDF, DOCX oder XLSX verwenden.`);
-            }
-            
-            setAnalysisProgress(15);
-            setAnalysisStatusMessage('Text wird extrahiert...');
+            if (correctAnswerIndices.length === 0) continue;
 
-            if (!textContent.trim()) throw new Error('Kein Text in der Datei gefunden.');
-            
-            const handleProgressUpdate = (message: string) => {
-                setAnalysisStatusMessage(message);
-                setAnalysisProgress(prev => Math.min(90, prev + 10));
+            const question: Omit<Question, 'id' | 'created_at'> = {
+                questionText,
+                options,
+                correctAnswerIndices,
+                category: normalizeText(row['Kategorie'] || 'Allgemein'),
+                type: String(row['Fragetyp']).startsWith('Single') ? 'Single' : 'Multi',
+                verband: uploadVerband,
             };
-            const extractedQuestions = await structureAndExtractQuestions(textContent, handleProgressUpdate);
-            
-            // Normalize the output from the AI to ensure clean data.
-            allParsedQuestions = extractedQuestions.map(q => ({
-                ...q,
-                questionText: normalizeText(q.questionText),
-                options: q.options.map(opt => normalizeText(opt)),
-                category: normalizeText(q.category),
-                verband: uploadVerband
-            }));
+            allParsedQuestions.push(question);
         }
         
         if (allParsedQuestions.length === 0) {
-          throw new Error("Es konnten keine Fragen aus der Datei extrahiert werden. Überprüfen Sie das Format oder den Inhalt.");
+          throw new Error("Es konnten keine Fragen aus der CSV-Datei extrahiert werden. Überprüfen Sie das Spaltenformat (z.B. 'Frage', 'Antwort 1', 'Antwort 1 korrekt').");
         }
-
-        setAnalysisProgress(95);
-        setAnalysisStatusMessage('Fragen werden in die Datenbank importiert...');
+        
         await saveQuestions(allParsedQuestions);
 
-        setAnalysisProgress(100);
-        setAnalysisStatusMessage('Import erfolgreich abgeschlossen!');
-        await new Promise(resolve => setTimeout(resolve, 1000)); 
-        
         showSuccessMessage(`${allParsedQuestions.length} Fragen erfolgreich importiert!`);
         fetchQuestions();
         setFile(null);
@@ -255,9 +195,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     } catch (err: any) {
         setError(err.message || "Ein unbekannter Fehler ist aufgetreten.");
     } finally {
-        setAnalyzing(false);
-        setAnalysisProgress(0);
-        setAnalysisStatusMessage('');
+        setIsImporting(false);
     }
   }, [file, fetchQuestions, uploadVerband]);
 
@@ -560,9 +498,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               
               <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Daten Import</h2>
-                <p className="text-sm text-gray-600 mb-4">Laden Sie eine Datei (CSV, PDF, DOCX, etc.) hoch und wählen Sie den zugehörigen Verband.</p>
+                <p className="text-sm text-gray-600 mb-4">Laden Sie eine CSV-Datei hoch und wählen Sie den zugehörigen Verband.</p>
                 <div className="flex items-center space-x-4">
-                  <input type="file" onChange={handleFileChange} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#0B79D0]/10 file:text-[#0B79D0] hover:file:bg-[#0B79D0]/20"/>
+                  <input type="file" onChange={handleFileChange} accept=".csv" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#0B79D0]/10 file:text-[#0B79D0] hover:file:bg-[#0B79D0]/20"/>
                 </div>
                  {file && (
                   <div className="mt-4">
@@ -584,16 +522,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                     </div>
                   </div>
                 )}
-                {file && <button onClick={handleAnalyzeAndImport} disabled={analyzing || !uploadVerband} className="mt-4 w-full bg-[#0B79D0] text-white font-bold py-2 px-5 rounded-lg hover:bg-[#0968b4] transition-colors disabled:bg-gray-400">
-                  {analyzing ? 'Analysiere...' : `"${file.name}" importieren`}
+                {file && <button onClick={handleImportCSV} disabled={isImporting || !uploadVerband} className="mt-4 w-full bg-[#0B79D0] text-white font-bold py-2 px-5 rounded-lg hover:bg-[#0968b4] transition-colors disabled:bg-gray-400">
+                  {isImporting ? 'Importiere...' : `"${file.name}" importieren`}
                 </button>}
-                 {analyzing && <div className="mt-4 w-full">
-                    <div className="flex justify-between mb-1">
-                        <span className="text-base font-medium text-slate-700">{analysisStatusMessage}</span>
-                        <span className="text-sm font-medium text-[#0B79D0]">{analysisProgress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 rounded-full h-2.5"><div className="bg-[#0B79D0] h-2.5 rounded-full" style={{ width: `${analysisProgress}%` }}></div></div>
-                  </div>}
               </div>
               <div className="bg-white p-6 rounded-xl shadow-lg">
                  <h2 className="text-xl font-bold text-gray-800 mb-4">Daten Export</h2>

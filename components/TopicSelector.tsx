@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
-import { QuizSource, SchulhundModuleType } from '../App';
+import { SchulhundModuleType } from '../App';
 import { SUPABASE_URL } from '../services/supabaseService';
 import DownloadIcon from './icons/DownloadIcon';
 
 interface TopicSelectorProps {
-  onStartQuiz: (topic: string, numQuestions: number, source: QuizSource, schulhundModule: SchulhundModuleType) => void;
+  onStartQuiz: (topic: string, numQuestions: number, schulhundModule: SchulhundModuleType) => void;
 }
 
 const TOPIC = "DZKB Hundeführerschein Theorieprüfung";
@@ -17,9 +17,9 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({ onStartQuiz }) => {
   const [numQuestions, setNumQuestions] = useState<number | null>(5);
   const [schulhundModule, setSchulhundModule] = useState<SchulhundModuleType | null>(null);
 
-  const handleStart = (source: QuizSource) => {
+  const handleStart = () => {
     if (numQuestions && schulhundModule) {
-      onStartQuiz(TOPIC, numQuestions, source, schulhundModule);
+      onStartQuiz(TOPIC, numQuestions, schulhundModule);
     }
   };
 
@@ -96,7 +96,7 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({ onStartQuiz }) => {
             <div className="mt-4">
                <button
                 type="button"
-                onClick={() => handleStart('db')}
+                onClick={handleStart}
                 className="w-full bg-[#0B79D0] text-white font-bold py-4 px-4 rounded-lg hover:bg-[#0968b4] focus:outline-none focus:ring-4 focus:ring-[#0B79D0]/50 transition-all duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100"
                 disabled={!numQuestions || !schulhundModule}
               >

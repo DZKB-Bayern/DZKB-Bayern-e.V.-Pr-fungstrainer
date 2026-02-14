@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback } from 'react';
 import { Question } from './types';
 import TopicSelector from './components/TopicSelector';
@@ -8,12 +9,10 @@ import Loader from './components/Loader';
 import Login from './components/Login';
 import AdminLogin from './components/AdminLogin';
 import AdminPanel from './components/AdminPanel';
-import { generateQuiz } from './services/geminiService';
 import { fetchRandomQuestions } from './services/supabaseService';
 
 type GameState = 'config' | 'quiz' | 'results';
 type View = 'user' | 'admin_login' | 'admin_panel';
-export type QuizSource = 'ai' | 'db';
 export type Verband = 'DZKB' | 'ProHunde';
 export type SchulhundModuleType = 'schulhund' | 'hundefuehrerschein';
 
@@ -59,17 +58,11 @@ const App: React.FC = () => {
     setIsAuthenticated(true);
   };
 
-  const handleStartQuiz = useCallback(async (topic: string, numQuestions: number, source: QuizSource, schulhundModule: SchulhundModuleType) => {
+  const handleStartQuiz = useCallback(async (topic: string, numQuestions: number, schulhundModule: SchulhundModuleType) => {
     setIsLoading(true);
     setError(null);
     try {
-      let fetchedQuestions: Question[];
-      // Der 'ai'-Pfad ist von der Benutzeroberfläche nicht mehr erreichbar, bleibt aber für eine mögliche zukünftige Verwendung erhalten.
-      if (source === 'ai') {
-        fetchedQuestions = await generateQuiz(topic, numQuestions);
-      } else {
-        fetchedQuestions = await fetchRandomQuestions(numQuestions, schulhundModule);
-      }
+      const fetchedQuestions = await fetchRandomQuestions(numQuestions, schulhundModule);
 
       // Normalisiere alle abgerufenen Fragen, um Text aus der Datenbank oder von der KI zu bereinigen
        const normalizedQuestions = fetchedQuestions.map(q => ({
@@ -232,11 +225,11 @@ const App: React.FC = () => {
         <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-lg">DZKB Bayern e.V. Prüfungstrainer</h1>
         <p className="text-blue-100 mt-2 text-lg">Teste dein Wissen.</p>
       </header>
+      {/* FIX: Corrected ternary operator syntax from `... ? ... : ... : ...` to `... ? ... : ...` to resolve parsing error. */}
       <main className={`w-full max-w-4xl mx-auto flex ${isQuizActive ? 'flex-grow' : 'justify-center'}`}>
         {renderUserContent()}
       </main>
        <footer className="w-full max-w-4xl mx-auto text-center mt-8 text-blue-200 text-sm flex-shrink-0">
-        <p>Unterstützt durch die Gemini API</p>
          <button onClick={() => setView('admin_login')} className="text-blue-200 hover:text-white text-xs transition-colors mt-2">
             Admin
           </button>

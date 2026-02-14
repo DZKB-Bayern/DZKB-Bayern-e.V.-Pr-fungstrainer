@@ -21,7 +21,8 @@ const Quiz: React.FC<QuizProps> = ({ questions, userAnswers, onAnswerSelect, onS
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      // FIX: Decrement the index to go to the previous question.
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
     }
   };
   
