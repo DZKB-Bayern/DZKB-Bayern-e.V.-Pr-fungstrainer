@@ -18,7 +18,6 @@ export interface AccessCode {
   email: string;
   is_active: boolean;
 
-  // Versand-Tracking (optional in der UI, aber im DB-Schema vorhanden)
   sent_at?: string | null;
   send_status?: string | null;
   send_error?: string | null;

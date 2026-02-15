@@ -65,6 +65,8 @@ const AccessCodeManager: React.FC = () => {
   };
 
   const handleToggleStatus = async (codeToUpdate: AccessCode) => {
+    // FIX: Refactored to correctly implement optimistic UI update with proper error handling.
+    // The UI is updated immediately for responsiveness.
     setCodes(prev =>
       prev.map(c =>
         c.id === codeToUpdate.id ? { ...c, is_active: !c.is_active } : c,
@@ -76,6 +78,7 @@ const AccessCodeManager: React.FC = () => {
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Fehler beim Aktualisieren des Status.');
+      // If the API call fails, revert the UI change to reflect the actual state.
       setCodes(prev =>
         prev.map(c =>
           c.id === codeToUpdate.id
@@ -115,41 +118,34 @@ const AccessCodeManager: React.FC = () => {
   return (
     <div className="space-y-8">
       <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2">
-          <KeyIcon className="w-6 h-6"/> Neuer Zugangscode
-        </h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Name optional, E-Mail erforderlich.
-        </p>
-
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <input
-              type="text"
-              value={studentName}
-              onChange={(e) => setStudentName(e.target.value)}
-              placeholder="Name des Studenten (optional)"
-              className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
-            />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="E-Mail-Adresse (erforderlich)"
-              className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
-              required
-            />
-            <button
-              onClick={handleGenerateCode}
-              disabled={isGenerating}
-              className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
-            >
-              {isGenerating ? 'Erstelle...' : 'Code erstellen'}
-            </button>
-          </div>
+        <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2"><KeyIcon className="w-6 h-6"/> Neuer Zugangscode</h2>
+        <p className="text-sm text-gray-600 mb-4">Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Der Name ist optional, die E-Mail-Adresse ist erforderlich.</p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <input
+            type="text"
+            value={studentName}
+            onChange={(e) => setStudentName(e.target.value)}
+            placeholder="Name des Studenten (optional)"
+            className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="E-Mail-Adresse (erforderlich)"
+            className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+            required
+          />
+          <button
+            onClick={handleGenerateCode}
+            disabled={isGenerating}
+            className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
+          >
+            {isGenerating ? 'Erstelle...' : 'Code erstellen'}
+          </button>
         </div>
       </div>
-
+      
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Bestehende Zugangscodes ({codes.length})</h2>
         {error && <p className="text-red-600 font-semibold mb-4">{error}</p>}
@@ -183,11 +179,11 @@ const AccessCodeManager: React.FC = () => {
                     <td className="p-2">{code.email}</td>
                     <td className="p-2 text-sm text-gray-500">{formatDate(code.created_at)}</td>
                     <td className="p-2">
-                      <ToggleSwitch
-                        enabled={code.is_active}
-                        onChange={() => handleToggleStatus(code)}
-                        ariaLabel={`Zugang für ${code.student_name || code.code} ${code.is_active ? 'deaktivieren' : 'aktivieren'}`}
-                      />
+                       <ToggleSwitch 
+                          enabled={code.is_active}
+                          onChange={() => handleToggleStatus(code)}
+                          ariaLabel={`Zugang für ${code.student_name || code.code} ${code.is_active ? 'deaktivieren' : 'aktivieren'}`}
+                       />
                     </td>
                     <td className="p-2">
                       <button onClick={() => handleDelete(code.id)} className="text-red-500 font-semibold">

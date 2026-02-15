@@ -214,12 +214,17 @@ export const fetchAllAccessCodes = async (): Promise<AccessCode[]> => {
 /**
  * Erstellt einen neuen Zugangscode in der Datenbank.
  */
-export const createAccessCode = async (code: string, studentName?: string | null): Promise<AccessCode> => {
+export const createAccessCode = async (code: string, studentName?: string | null, email?: string): Promise<AccessCode> => {
     if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+        throw new Error('E-Mail-Adresse ist erforderlich.');
+    }
 
     const { data, error } = await supabase
         .from('access_codes')
-        .insert([{ code, student_name: studentName, is_active: true }])
+        .insert([{ code, student_name: studentName ?? null, email: normalizedEmail, is_active: true }])
         .select()
         .single();
 
