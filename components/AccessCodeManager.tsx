@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAllAccessCodes, createAccessCode, updateAccessCode, deleteAccessCode } from '../services/supabaseService';
 import { AccessCode } from '../types';
@@ -7,114 +6,179 @@ import KeyIcon from './icons/KeyIcon';
 import ClipboardIcon from './icons/ClipboardIcon';
 import CheckIcon from './icons/CheckIcon';
 
-const ADJECTIVES = [
-  'BRAV',
-  'FRECH',
-  'FRÖHLICH',
-  'VERSPIELT',
-  'TREU',
-  'CHARMANT',
-  'CLEVER',
-  'MUTIG',
-  'LIEB',
-  'TAPFER',
-  'NEUGIERIG',
-  'GLÜCKLICH',
-  'FLAUSCHIG',
-  'WACH',
-  'ENTSPANNT',
-  'SOUVERÄN',
-  'ZUVERLÄSSIG',
-  'LERNFREUDIG',
-];
-
-const NOUNS = [
-  'PFOTE',
-  'FELLNASE',
-  'WUFF',
-  'WELPE',
-  'SCHNAUZE',
-  'LECKERLI',
-  'KNOCHEN',
-  'SPIELZEUG',
-  'APPORT',
-  'TRAIL',
-  'DUMMY',
-  'HUNDEWIESE',
-  'GRUPPE',
-  'TRAINING',
-  'CLICKER',
-  'LEINE',
-  'HALSBAND',
-];
+const ADJECTIVES = ['BRAV', 'FRECH', 'FRÖHLICH', 'VERSPIELT', 'TREU', 'CHARMANT', 'CLEVER', 'MUTIG', 'LIEB', 'TAPFER', 'NEUGIERIG', 'GLÜCKLICH', 'FLAUSCHIG', 'WACH', 'ENTSPANNT', 'SOUVERÄN', 'ZUVERLÄSSIG', 'LERNFREUDIG'];
+const NOUNS = ['PFOTE', 'FELLNASE', 'WUFF', 'WELPE', 'SCHNAUZE', 'LECKERLI', 'KNOCHEN', 'SPIELZEUG', 'APPORT', 'TRAIL', 'DUMMY', 'HUNDEWIESE', 'GRUPPE', 'TRAINING', 'CLICKER', 'LEINE', 'HALSBAND'];
 
 const generateReadableCode = (): string => {
   const randomAdj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const randomNoun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const randomNumber = Math.floor(100 + Math.random() * 900);
+  const randomNumber = Math.floor(Math.random() * 900) + 100;
   return `${randomAdj}-${randomNoun}-${randomNumber}`;
 };
 
 const AccessCodeManager: React.FC = () => {
   const [codes, setCodes] = useState<AccessCode[]>([]);
-  const [newCodeName, setNewCodeName] = useState('');
-  const [copiedCodeId, setCopiedCodeId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [studentName, setStudentName] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const loadCodes = useCallback(async () => {
     setIsLoading(true);
-    const { data, error } = await fetchAllAccessCodes();
-    if (error) {
-      setError(error.message);
-    } else {
-      setCodes(data || []);
+    try {
+      const fetchedCodes = await fetchAllAccessCodes();
+      setCodes(fetchedCodes);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Laden der Zugangscodes.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
     loadCodes();
   }, [loadCodes]);
 
-  const handleCreateCode = async () => {
-    if (!newCodeName.trim()) return;
-    const code = generateReadableCode();
-    const { error } = await createAccessCode(code, newCodeName.trim());
-    if (!error) {
-      setNewCodeName('');
-      loadCodes();
+  const handleGenerateCode = async () => {
+    setIsGenerating(true);
+    try {
+      const newCodeString = generateReadableCode();
+      const newCode = await createAccessCode(newCodeString, studentName || null);
+      setCodes(prev => [newCode, ...prev]);
+      setStudentName('');
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Erstellen des Codes.');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
-  const handleToggleActive = async (id: number, isActive: boolean) => {
-    const { error } = await updateAccessCode(id, { is_active: !isActive });
-    if (!error) {
+  const handleToggleStatus = async (codeToUpdate: AccessCode) => {
+    // FIX: Refactored to correctly implement optimistic UI update with proper error handling.
+    // The UI is updated immediately for responsiveness.
+    setCodes(prev =>
+      prev.map(c =>
+        c.id === codeToUpdate.id ? { ...c, is_active: !c.is_active } : c,
+      ),
+    );
+
+    try {
+      await updateAccessCode(codeToUpdate.id, { is_active: !codeToUpdate.is_active });
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Aktualisieren des Status.');
+      // If the API call fails, revert the UI change to reflect the actual state.
       setCodes(prev =>
-        prev.map(code =>
-          code.id === id ? { ...code, is_active: !isActive } : code
-        )
+        prev.map(c =>
+          c.id === codeToUpdate.id
+            ? { ...c, is_active: codeToUpdate.is_active }
+            : c,
+        ),
       );
     }
   };
 
-  const handleDeleteCode = async (id: number) => {
-    if (!window.confirm('Zugangscode wirklich löschen?')) return;
-    const { error } = await deleteAccessCode(id);
-    if (!error) {
-      setCodes(prev => prev.filter(code => code.id !== id));
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Sind Sie sicher, dass Sie diesen Zugangscode endgültig löschen möchten?')) {
+      try {
+        await deleteAccessCode(id);
+        setCodes(prev => prev.filter(c => c.id !== id));
+        setError(null);
+      } catch (err: any) {
+        setError(err.message || 'Fehler beim Löschen des Codes.');
+      }
     }
   };
 
-  const handleCopyCode = async (code: string, id: number) => {
-    await navigator.clipboard.writeText(code);
-    setCopiedCodeId(id);
-    setTimeout(() => setCopiedCodeId(null), 1500);
+  const handleCopyToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   return (
-    <div>
-      {/* UI unverändert */}
+    <div className="space-y-8">
+      <div className="bg-white p-6 rounded-xl shadow-lg">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2"><KeyIcon className="w-6 h-6"/> Neuer Zugangscode</h2>
+        <p className="text-sm text-gray-600 mb-4">Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Der Name ist optional, hilft aber bei der Zuordnung.</p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <input
+            type="text"
+            value={studentName}
+            onChange={(e) => setStudentName(e.target.value)}
+            placeholder="Name des Studenten (optional)"
+            className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+          />
+          <button
+            onClick={handleGenerateCode}
+            disabled={isGenerating}
+            className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
+          >
+            {isGenerating ? 'Erstelle...' : 'Code erstellen'}
+          </button>
+        </div>
+      </div>
+      
+      <div className="bg-white p-6 rounded-xl shadow-lg">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Bestehende Zugangscodes ({codes.length})</h2>
+        {error && <p className="text-red-600 font-semibold mb-4">{error}</p>}
+        {isLoading ? (
+          <p>Lade Zugangscodes...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b text-sm text-gray-600">
+                  <th className="p-2">Code</th>
+                  <th className="p-2">Student</th>
+                  <th className="p-2">Erstellt am</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {codes.map(code => (
+                  <tr key={code.id} className="border-b text-gray-800 hover:bg-slate-50">
+                    <td className="p-2 font-mono">
+                      <div className="flex items-center gap-2">
+                        {code.code}
+                        <button onClick={() => handleCopyToClipboard(code.code)} className="text-slate-400 hover:text-[#0B79D0]">
+                          {copiedCode === code.code ? <CheckIcon className="w-4 h-4 text-green-600" /> : <ClipboardIcon className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-2">{code.student_name || <span className="text-gray-400">N/A</span>}</td>
+                    <td className="p-2 text-sm text-gray-500">{formatDate(code.created_at)}</td>
+                    <td className="p-2">
+                       <ToggleSwitch 
+                          enabled={code.is_active}
+                          onChange={() => handleToggleStatus(code)}
+                          ariaLabel={`Zugang für ${code.student_name || code.code} ${code.is_active ? 'deaktivieren' : 'aktivieren'}`}
+                       />
+                    </td>
+                    <td className="p-2">
+                      <button onClick={() => handleDelete(code.id)} className="text-red-500 font-semibold">
+                        Löschen
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
