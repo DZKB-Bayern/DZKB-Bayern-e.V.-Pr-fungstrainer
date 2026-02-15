@@ -10,7 +10,15 @@ interface TopicSelectorProps {
 const TOPIC = "DZKB Hundeführerschein Theorieprüfung";
 const questionOptions = [5, 10, 20, 60];
 
-const guideUrl = `${SUPABASE_URL}/storage/v1/object/public/learning_materials/studienleitfaden.pdf`;
+const guideVersion = (() => {
+  try {
+    return localStorage.getItem('guideVersion') || '';
+  } catch (_) {
+    return '';
+  }
+})();
+
+const guideUrl = `${SUPABASE_URL}/storage/v1/object/public/learning_materials/studienleitfaden.pdf${guideVersion ? `?v=${guideVersion}` : ''}`;
 
 const TopicSelector: React.FC<TopicSelectorProps> = ({ onStartQuiz }) => {
   const [numQuestions, setNumQuestions] = useState<number | null>(5);

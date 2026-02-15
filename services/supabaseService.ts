@@ -307,7 +307,7 @@ export const uploadLearningGuide = async (file: File): Promise<void> => {
   const { data, error } = await supabase.storage
     .from('learning_materials')
     .upload('studienleitfaden.pdf', file, {
-      cacheControl: '3600',
+      cacheControl: '0',
       upsert: true, // Überschreibt die Datei, falls sie bereits existiert
     });
 
