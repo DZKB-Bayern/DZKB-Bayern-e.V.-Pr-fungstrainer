@@ -51,7 +51,7 @@ const NOUNS = [
 const generateReadableCode = (): string => {
   const randomAdj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const randomNoun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const randomNumber = Math.floor(10 + Math.random() * 90);
+  const randomNumber = Math.floor(100 + Math.random() * 900);
   return `${randomAdj}-${randomNoun}-${randomNumber}`;
 };
 
