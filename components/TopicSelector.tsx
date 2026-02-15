@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { SUPABASE_URL } from '../services/supabaseService';
+import { createSignedLearningGuideUrl } from '../services/supabaseService';
 import DownloadIcon from './icons/DownloadIcon';
 
 interface TopicSelectorProps {
@@ -10,18 +10,26 @@ interface TopicSelectorProps {
 const TOPIC = "DZKB Hundeführerschein Theorieprüfung";
 const questionOptions = [5, 10, 20, 60];
 
-const guideVersion = (() => {
-  try {
-    return localStorage.getItem('guideVersion') || '';
-  } catch (_) {
-    return '';
-  }
-})();
-
-const guideUrl = `${SUPABASE_URL}/storage/v1/object/public/learning_materials/studienleitfaden.pdf${guideVersion ? `?v=${guideVersion}` : ''}`;
 
 const TopicSelector: React.FC<TopicSelectorProps> = ({ onStartQuiz }) => {
   const [numQuestions, setNumQuestions] = useState<number | null>(5);
+
+const [isDownloadingGuide, setIsDownloadingGuide] = useState(false);
+
+const handleDownloadGuide = async () => {
+  if (isDownloadingGuide) return;
+  setIsDownloadingGuide(true);
+  const { signedUrl, error } = await createSignedLearningGuideUrl();
+  setIsDownloadingGuide(false);
+
+  if (error || !signedUrl) {
+    alert('Der Studienleitfaden ist aktuell nicht verfügbar.');
+    return;
+  }
+
+  window.open(signedUrl, '_blank', 'noopener,noreferrer');
+};
+
 
   const handleStart = () => {
     if (numQuestions) {
@@ -38,15 +46,15 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({ onStartQuiz }) => {
           
           <div>
             <h3 className="text-lg font-semibold text-center text-slate-700 mb-4">Lernmaterialien</h3>
-             <a
-              href={guideUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-3 bg-orange-400 text-white font-bold py-4 px-4 rounded-lg border-2 border-orange-400 hover:bg-orange-500 hover:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/50 transition-all duration-300"
+             <button
+              type="button"
+              onClick={handleDownloadGuide}
+              className="w-full flex items-center justify-center gap-3 bg-orange-400 text-white font-bold py-4 px-4 rounded-lg border-2 border-orange-400 hover:bg-orange-500 hover:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/50 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isDownloadingGuide}
             >
               <DownloadIcon className="w-6 h-6" />
-              Hier kannst Du den Studienleitfaden herunterladen
-            </a>
+              {isDownloadingGuide ? 'Studienleitfaden wird geladen…' : 'Hier kannst Du den Studienleitfaden herunterladen'}
+            </button>
           </div>
 
           <div className="border-t border-gray-200 pt-8">

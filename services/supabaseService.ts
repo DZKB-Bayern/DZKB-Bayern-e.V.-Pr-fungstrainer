@@ -301,6 +301,24 @@ export const validateAdminCredentials = async (username: string, password: strin
  * Überschreibt eine vorhandene Datei, um sicherzustellen, dass immer nur die neueste Version verfügbar ist.
  * @param file Die PDF-Datei, die hochgeladen werden soll.
  */
+
+export const createSignedLearningGuideUrl = async (): Promise<{ signedUrl: string | null; error: Error | null }> => {
+  try {
+    const { data, error } = await supabase
+      .storage
+      .from('learning_materials')
+      .createSignedUrl('studienleitfaden.pdf', 60);
+
+    if (error) {
+      return { signedUrl: null, error: new Error(error.message) };
+    }
+
+    return { signedUrl: data?.signedUrl || null, error: null };
+  } catch (e: any) {
+    return { signedUrl: null, error: e instanceof Error ? e : new Error(String(e)) };
+  }
+};
+
 export const uploadLearningGuide = async (file: File): Promise<void> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 

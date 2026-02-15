@@ -30,7 +30,20 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           runtimeCaching: [
-            {
+            
+{
+              // Studienleitfaden: niemals aus Cache bedienen (immer Netzwerk), sonst sieht man alte PDFs
+              urlPattern: ({ url }) =>
+                url.hostname.endsWith('supabase.co') &&
+                (url.pathname.includes('/storage/v1/object/public/learning_materials/studienleitfaden.pdf') ||
+                 url.pathname.includes('/storage/v1/object/sign/learning_materials/studienleitfaden.pdf')),
+              handler: 'NetworkOnly',
+              options: {
+                cacheName: 'guide-no-cache',
+              },
+            },
+
+{
               urlPattern: ({ url }) => url.hostname.endsWith('supabase.co'),
               handler: 'NetworkFirst',
               options: {
