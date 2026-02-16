@@ -178,7 +178,7 @@ export const deleteMultipleQuestions = async (ids: number[]): Promise<void> => {
 export const validateAccessCode = async (code: string): Promise<boolean> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-  // Ablaufregel: Zugangscode ist maximal 12 Monate ab Erstellung (created_at) gültig
+  // Ablaufregel: Zugangscode ist maximal 12 Monate ab Erstellung gültig
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 1);
 
@@ -196,40 +196,6 @@ export const validateAccessCode = async (code: string): Promise<boolean> => {
   }
 
   return !!data;
-};
-
-
-/**
- * Self-Service: Fordert per E-Mail den Zugangscode erneut an.
- * Die Edge Function antwortet immer neutral (ok: true), unabhängig davon, ob die E-Mail existiert.
- */
-export const requestAccessCodeByEmail = async (email: string): Promise<boolean> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const normalizedEmail = (email || '').trim().toLowerCase();
-  if (!normalizedEmail) return true;
-
-  try {
-    const { data, error } = await supabase.functions.invoke('request-access-code', {
-      body: { email: normalizedEmail },
-    });
-
-    // Neutral: auch bei Fehlern im Frontend keine Details preisgeben
-    if (error) {
-      console.error('Fehler bei der Self-Service Code-Anforderung:', error);
-      return false;
-    }
-
-    if (data?.ok === false) {
-      console.error('Self-Service Function meldet Fehler:', data?.error);
-      return false;
-    }
-
-    return true;
-  } catch (e) {
-    console.error('Self-Service Code-Anforderung fehlgeschlagen:', e);
-    return false;
-  }
 };
 
 /**
@@ -371,5 +337,20 @@ export const uploadLearningGuide = async (file: File): Promise<void> => {
   if (error) {
     console.error('Fehler beim Hochladen des Studienleitfadens:', error);
     throw new Error('Der Studienleitfaden konnte nicht hochgeladen werden.');
+  }
+};
+
+export const requestAccessCodeByEmail = async (email: string): Promise<boolean> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+  const normalizedEmail = (email || "").trim().toLowerCase();
+  if (!normalizedEmail) return true;
+  try {
+    await supabase.functions.invoke("request-access-code", {
+      body: { email: normalizedEmail },
+    });
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
   }
 };
