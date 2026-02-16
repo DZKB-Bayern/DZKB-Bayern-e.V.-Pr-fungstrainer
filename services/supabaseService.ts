@@ -291,6 +291,35 @@ export const sendAccessCodeEmail = async (accessCodeId: number): Promise<void> =
   }
 };
 
+/**
+ * Self-Service: Fordert den Zugangscode per E-Mail an (Code vergessen?).
+ * Ruft die Supabase Edge Function "request-access-code" auf.
+ * Wichtig: Die Antwort ist bewusst neutral, um nicht preiszugeben, ob die E-Mail existiert.
+ */
+export const requestAccessCodeByEmail = async (email: string): Promise<void> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return;
+
+  const { data, error } = await supabase.functions.invoke('request-access-code', {
+    body: { email: normalizedEmail },
+  });
+
+  // Neutral nach außen: wir werfen nur bei echten technischen Fehlern,
+  // die UI zeigt trotzdem eine neutrale Erfolgsmeldung.
+  if (error) {
+    console.error('Fehler beim Aufruf der Edge Function request-access-code:', error);
+    throw new Error(error.message || 'Anforderung konnte nicht gesendet werden.');
+  }
+  if (data && data.ok === false) {
+    // Edge Function kann optional ok:false liefern; trotzdem neutral behandeln
+    console.error('Edge Function request-access-code meldet Fehler:', data);
+    throw new Error(data.error || 'Anforderung konnte nicht gesendet werden.');
+  }
+};
+
+
 
 /**
  * Löscht einen Zugangscode aus der Datenbank.
