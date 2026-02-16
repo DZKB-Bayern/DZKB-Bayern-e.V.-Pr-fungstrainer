@@ -21,6 +21,7 @@ const AccessCodeManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [studentName, setStudentName] = useState('');
+  const [studentEmail, setStudentEmail] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -45,9 +46,10 @@ const AccessCodeManager: React.FC = () => {
     setIsGenerating(true);
     try {
       const newCodeString = generateReadableCode();
-      const newCode = await createAccessCode(newCodeString, studentName || null);
+      const newCode = await createAccessCode(newCodeString, studentName, studentEmail);
       setCodes(prev => [newCode, ...prev]);
       setStudentName('');
+      setStudentEmail('');
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Fehler beim Erstellen des Codes.');
@@ -111,18 +113,27 @@ const AccessCodeManager: React.FC = () => {
     <div className="space-y-8">
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2"><KeyIcon className="w-6 h-6"/> Neuer Zugangscode</h2>
-        <p className="text-sm text-gray-600 mb-4">Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Der Name ist optional, hilft aber bei der Zuordnung.</p>
+        <p className="text-sm text-gray-600 mb-4">Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Name und E-Mail sind erforderlich.</p>
         <div className="flex flex-col sm:flex-row gap-4">
           <input
             type="text"
             value={studentName}
             onChange={(e) => setStudentName(e.target.value)}
-            placeholder="Name des Studenten (optional)"
+            placeholder="Name des Studenten (erforderlich)"
             className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+            required
           />
+<input
+  type="email"
+  value={studentEmail}
+  onChange={(e) => setStudentEmail(e.target.value)}
+  placeholder="E-Mail-Adresse (erforderlich)"
+  className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+  required
+/>
           <button
             onClick={handleGenerateCode}
-            disabled={isGenerating}
+            disabled={isGenerating || !studentName.trim() || !studentEmail.trim()}
             className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
           >
             {isGenerating ? 'Erstelle...' : 'Code erstellen'}
@@ -142,6 +153,7 @@ const AccessCodeManager: React.FC = () => {
                 <tr className="border-b text-sm text-gray-600">
                   <th className="p-2">Code</th>
                   <th className="p-2">Student</th>
+                  <th className="p-2">E-Mail</th>
                   <th className="p-2">Erstellt am</th>
                   <th className="p-2">Status</th>
                   <th className="p-2">Aktionen</th>
@@ -159,6 +171,7 @@ const AccessCodeManager: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-2">{code.student_name || <span className="text-gray-400">N/A</span>}</td>
+                    <td className="p-2 text-sm text-gray-500">{code.email || <span className="text-gray-400">N/A</span>}</td>
                     <td className="p-2 text-sm text-gray-500">{formatDate(code.created_at)}</td>
                     <td className="p-2">
                        <ToggleSwitch 
