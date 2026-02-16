@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchAllAccessCodes, createAccessCode, updateAccessCode, deleteAccessCode } from '../services/supabaseService';
+import { fetchAllAccessCodes, createAccessCode, updateAccessCode, deleteAccessCode, sendAccessCodeEmail } from '../services/supabaseService';
 import { AccessCode } from '../types';
 import ToggleSwitch from './ToggleSwitch';
 import KeyIcon from './icons/KeyIcon';
@@ -20,8 +20,10 @@ const AccessCodeManager: React.FC = () => {
   const [codes, setCodes] = useState<AccessCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [studentName, setStudentName] = useState('');
-  const [studentEmail, setStudentEmail] = useState('');
+  const [email, setEmail] = useState('');
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -43,24 +45,50 @@ const AccessCodeManager: React.FC = () => {
   }, [loadCodes]);
 
   const handleGenerateCode = async () => {
+    const normalizedStudentName = studentName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedStudentName) {
+      setError('Bitte den Namen des Studenten eingeben.');
+      return;
+    }
+    if (!normalizedEmail) {
+      setError('Bitte eine E-Mail-Adresse eingeben.');
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const newCodeString = generateReadableCode();
-      const newCode = await createAccessCode(newCodeString, studentName, studentEmail);
+
+      // 1) In DB speichern
+      const newCode = await createAccessCode(newCodeString, normalizedStudentName, normalizedEmail);
+
+      // 2) In UI direkt anzeigen
       setCodes(prev => [newCode, ...prev]);
+
+      // 3) Mail sofort senden (Edge Function)
+      try {
+        await sendAccessCodeEmail(newCode.id);
+      } catch (mailErr: any) {
+        // Code ist trotzdem erstellt — wir zeigen nur eine Warnung
+        console.error(mailErr);
+        setError((mailErr?.message || 'E-Mail konnte nicht gesendet werden.') + ' (Code wurde trotzdem erstellt.)');
+      }
+
       setStudentName('');
-      setStudentEmail('');
-      setError(null);
+      setEmail('');
+      if (!error) setError(null);
     } catch (err: any) {
       setError(err.message || 'Fehler beim Erstellen des Codes.');
     } finally {
       setIsGenerating(false);
+      // Optional: Status-Spalten aktualisieren (falls du sie in der Tabelle anzeigen willst)
+      // loadCodes();
     }
   };
 
   const handleToggleStatus = async (codeToUpdate: AccessCode) => {
-    // FIX: Refactored to correctly implement optimistic UI update with proper error handling.
-    // The UI is updated immediately for responsiveness.
     setCodes(prev =>
       prev.map(c =>
         c.id === codeToUpdate.id ? { ...c, is_active: !c.is_active } : c,
@@ -72,7 +100,6 @@ const AccessCodeManager: React.FC = () => {
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Fehler beim Aktualisieren des Status.');
-      // If the API call fails, revert the UI change to reflect the actual state.
       setCodes(prev =>
         prev.map(c =>
           c.id === codeToUpdate.id
@@ -112,35 +139,42 @@ const AccessCodeManager: React.FC = () => {
   return (
     <div className="space-y-8">
       <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2"><KeyIcon className="w-6 h-6"/> Neuer Zugangscode</h2>
-        <p className="text-sm text-gray-600 mb-4">Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Name und E-Mail sind erforderlich.</p>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <input
-            type="text"
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            placeholder="Name des Studenten (erforderlich)"
-            className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
-            required
-          />
-<input
-  type="email"
-  value={studentEmail}
-  onChange={(e) => setStudentEmail(e.target.value)}
-  placeholder="E-Mail-Adresse (erforderlich)"
-  className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
-  required
-/>
-          <button
-            onClick={handleGenerateCode}
-            disabled={isGenerating || !studentName.trim() || !studentEmail.trim()}
-            className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
-          >
-            {isGenerating ? 'Erstelle...' : 'Code erstellen'}
-          </button>
+        <h2 className="text-xl font-bold text-gray-800 mb-4 inline-flex items-center gap-2">
+          <KeyIcon className="w-6 h-6"/> Neuer Zugangscode
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Erstellen Sie einen neuen, einzigartigen Zugangscode für einen Studenten. Name und E-Mail sind erforderlich.
+        </p>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <input
+              type="text"
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Name des Studenten (erforderlich)"
+              className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+              required
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="E-Mail-Adresse (erforderlich)"
+              className="flex-grow p-2 border rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#0B79D0] focus:outline-none"
+              required
+            />
+            <button
+              onClick={handleGenerateCode}
+              disabled={isGenerating}
+              className="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400"
+            >
+              {isGenerating ? 'Erstelle...' : 'Code erstellen'}
+            </button>
+          </div>
         </div>
       </div>
-      
+
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Bestehende Zugangscodes ({codes.length})</h2>
         {error && <p className="text-red-600 font-semibold mb-4">{error}</p>}
@@ -170,15 +204,15 @@ const AccessCodeManager: React.FC = () => {
                         </button>
                       </div>
                     </td>
-                    <td className="p-2">{code.student_name || <span className="text-gray-400">N/A</span>}</td>
-                    <td className="p-2 text-sm text-gray-500">{code.email || <span className="text-gray-400">N/A</span>}</td>
+                    <td className="p-2">{code.student_name}</td>
+                    <td className="p-2">{code.email}</td>
                     <td className="p-2 text-sm text-gray-500">{formatDate(code.created_at)}</td>
                     <td className="p-2">
-                       <ToggleSwitch 
-                          enabled={code.is_active}
-                          onChange={() => handleToggleStatus(code)}
-                          ariaLabel={`Zugang für ${code.student_name || code.code} ${code.is_active ? 'deaktivieren' : 'aktivieren'}`}
-                       />
+                      <ToggleSwitch
+                        enabled={code.is_active}
+                        onChange={() => handleToggleStatus(code)}
+                        ariaLabel={`Zugang für ${code.student_name || code.code} ${code.is_active ? 'deaktivieren' : 'aktivieren'}`}
+                      />
                     </td>
                     <td className="p-2">
                       <button onClick={() => handleDelete(code.id)} className="text-red-500 font-semibold">
