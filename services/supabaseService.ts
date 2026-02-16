@@ -178,11 +178,16 @@ export const deleteMultipleQuestions = async (ids: number[]): Promise<void> => {
 export const validateAccessCode = async (code: string): Promise<boolean> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
+  // Ablaufregel: Zugangscode ist maximal 12 Monate ab Erstellung (created_at) gültig
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 1);
+
   const { data, error } = await supabase
     .from('access_codes')
     .select('id')
     .eq('code', code)
     .eq('is_active', true)
+    .gte('created_at', cutoff.toISOString())
     .single();
 
   if (error && error.code !== 'PGRST116') { // PGRST116: "Query returned no rows", was für ungültige Codes erwartet wird
@@ -290,35 +295,6 @@ export const sendAccessCodeEmail = async (accessCodeId: number): Promise<void> =
     throw new Error(data.error || 'E-Mail konnte nicht gesendet werden.');
   }
 };
-
-/**
- * Self-Service: Fordert den Zugangscode per E-Mail an (Code vergessen?).
- * Ruft die Supabase Edge Function "request-access-code" auf.
- * Wichtig: Die Antwort ist bewusst neutral, um nicht preiszugeben, ob die E-Mail existiert.
- */
-export const requestAccessCodeByEmail = async (email: string): Promise<void> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const normalizedEmail = (email || '').trim().toLowerCase();
-  if (!normalizedEmail) return;
-
-  const { data, error } = await supabase.functions.invoke('request-access-code', {
-    body: { email: normalizedEmail },
-  });
-
-  // Neutral nach außen: wir werfen nur bei echten technischen Fehlern,
-  // die UI zeigt trotzdem eine neutrale Erfolgsmeldung.
-  if (error) {
-    console.error('Fehler beim Aufruf der Edge Function request-access-code:', error);
-    throw new Error(error.message || 'Anforderung konnte nicht gesendet werden.');
-  }
-  if (data && data.ok === false) {
-    // Edge Function kann optional ok:false liefern; trotzdem neutral behandeln
-    console.error('Edge Function request-access-code meldet Fehler:', data);
-    throw new Error(data.error || 'Anforderung konnte nicht gesendet werden.');
-  }
-};
-
 
 
 /**
