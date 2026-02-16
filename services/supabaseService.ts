@@ -198,6 +198,40 @@ export const validateAccessCode = async (code: string): Promise<boolean> => {
   return !!data;
 };
 
+
+/**
+ * Self-Service: Fordert per E-Mail den Zugangscode erneut an.
+ * Die Edge Function antwortet immer neutral (ok: true), unabhängig davon, ob die E-Mail existiert.
+ */
+export const requestAccessCodeByEmail = async (email: string): Promise<boolean> => {
+  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return true;
+
+  try {
+    const { data, error } = await supabase.functions.invoke('request-access-code', {
+      body: { email: normalizedEmail },
+    });
+
+    // Neutral: auch bei Fehlern im Frontend keine Details preisgeben
+    if (error) {
+      console.error('Fehler bei der Self-Service Code-Anforderung:', error);
+      return false;
+    }
+
+    if (data?.ok === false) {
+      console.error('Self-Service Function meldet Fehler:', data?.error);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Self-Service Code-Anforderung fehlgeschlagen:', e);
+    return false;
+  }
+};
+
 /**
  * Holt alle Zugangscodes aus der Datenbank.
  */
@@ -219,39 +253,20 @@ export const fetchAllAccessCodes = async (): Promise<AccessCode[]> => {
 /**
  * Erstellt einen neuen Zugangscode in der Datenbank.
  */
-export const createAccessCode = async (
-  code: string,
-  studentName: string,
-  email: string
-): Promise<AccessCode> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const createAccessCode = async (code: string, studentName?: string | null): Promise<AccessCode> => {
+    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-  const normalizedStudentName = (studentName || '').trim();
-  const normalizedEmail = (email || '').trim().toLowerCase();
+    const { data, error } = await supabase
+        .from('access_codes')
+        .insert([{ code, student_name: studentName, is_active: true }])
+        .select()
+        .single();
 
-  if (!normalizedStudentName) {
-    throw new Error('Name des Studenten ist erforderlich.');
-  }
-  if (!normalizedEmail) {
-    throw new Error('E-Mail-Adresse ist erforderlich.');
-  }
-
-  const { data, error } = await supabase
-    .from('access_codes')
-    .insert([{
-      code,
-      student_name: normalizedStudentName,
-      email: normalizedEmail,
-      is_active: true
-    }])
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Fehler beim Erstellen des Zugangscodes:', error);
-    throw new Error('Zugangscode konnte nicht erstellt werden.');
-  }
-  return data as AccessCode;
+    if (error) {
+        console.error('Fehler beim Erstellen des Zugangscodes:', error);
+        throw new Error('Zugangscode konnte nicht erstellt werden.');
+    }
+    return data as AccessCode;
 };
 
 /**
@@ -273,29 +288,6 @@ export const updateAccessCode = async (id: number, updates: Partial<Omit<AccessC
     }
     return data as AccessCode;
 };
-
-/**
- * Sendet den Zugangscode per E-Mail über die Supabase Edge Function "send-access-code".
- * Erwartet ein Body-Objekt: { access_code_id: number }
- */
-export const sendAccessCodeEmail = async (accessCodeId: number): Promise<void> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const { data, error } = await supabase.functions.invoke('send-access-code', {
-    body: { access_code_id: accessCodeId },
-  });
-
-  if (error) {
-    console.error('Fehler beim Aufruf der Edge Function send-access-code:', error);
-    throw new Error(error.message || 'E-Mail konnte nicht gesendet werden.');
-  }
-
-  // Edge Function liefert { ok: true } oder { ok: false, error: ... }
-  if (data && data.ok === false) {
-    throw new Error(data.error || 'E-Mail konnte nicht gesendet werden.');
-  }
-};
-
 
 /**
  * Löscht einen Zugangscode aus der Datenbank.
