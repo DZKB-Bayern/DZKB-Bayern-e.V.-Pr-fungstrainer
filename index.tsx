@@ -1,5 +1,3 @@
-import "./index.css";
-import "./pwa";
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

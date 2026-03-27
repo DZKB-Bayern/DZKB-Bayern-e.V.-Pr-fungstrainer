@@ -14,7 +14,7 @@ import { fetchRandomQuestions } from './services/supabaseService';
 
 type GameState = 'config' | 'quiz' | 'results';
 type View = 'user' | 'admin_login' | 'admin_panel';
-export type Verband = 'DZKB' | 'ProHunde';
+export type Verband = 'DZKB';
 
 // Hilfsfunktion zur Normalisierung von Texten, um HTML-Entitäten und falsche Zeilenumbrüche zu korrigieren.
 const normalizeText = (text: string | null | undefined): string => {
@@ -62,28 +62,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      let fetchedQuestions;
-      try {
-        fetchedQuestions = await fetchRandomQuestions(numQuestions);
-        // Cache for offline usage
-        try {
-          localStorage.setItem('dzkb_questions_cache', JSON.stringify(fetchedQuestions));
-        } catch {
-          /* ignore cache errors */
-        }
-      } catch (err) {
-        // Offline fallback: use last cached questions (if available)
-        try {
-          const cached = localStorage.getItem('dzkb_questions_cache');
-          if (cached) {
-            fetchedQuestions = JSON.parse(cached);
-          } else {
-            throw err;
-          }
-        } catch {
-          throw err;
-        }
-      }
+      const fetchedQuestions = await fetchRandomQuestions(numQuestions);
 
       // Normalisiere alle abgerufenen Fragen, um Text aus der Datenbank oder von der KI zu bereinigen
        const normalizedQuestions = fetchedQuestions.map(q => ({

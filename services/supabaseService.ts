@@ -214,39 +214,20 @@ export const fetchAllAccessCodes = async (): Promise<AccessCode[]> => {
 /**
  * Erstellt einen neuen Zugangscode in der Datenbank.
  */
-export const createAccessCode = async (
-  code: string,
-  studentName: string,
-  email: string
-): Promise<AccessCode> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
+export const createAccessCode = async (code: string, studentName?: string | null): Promise<AccessCode> => {
+    if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
-  const normalizedStudentName = (studentName || '').trim();
-  const normalizedEmail = (email || '').trim().toLowerCase();
+    const { data, error } = await supabase
+        .from('access_codes')
+        .insert([{ code, student_name: studentName, is_active: true }])
+        .select()
+        .single();
 
-  if (!normalizedStudentName) {
-    throw new Error('Name des Studenten ist erforderlich.');
-  }
-  if (!normalizedEmail) {
-    throw new Error('E-Mail-Adresse ist erforderlich.');
-  }
-
-  const { data, error } = await supabase
-    .from('access_codes')
-    .insert([{
-      code,
-      student_name: normalizedStudentName,
-      email: normalizedEmail,
-      is_active: true
-    }])
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Fehler beim Erstellen des Zugangscodes:', error);
-    throw new Error('Zugangscode konnte nicht erstellt werden.');
-  }
-  return data as AccessCode;
+    if (error) {
+        console.error('Fehler beim Erstellen des Zugangscodes:', error);
+        throw new Error('Zugangscode konnte nicht erstellt werden.');
+    }
+    return data as AccessCode;
 };
 
 /**
@@ -268,58 +249,6 @@ export const updateAccessCode = async (id: number, updates: Partial<Omit<AccessC
     }
     return data as AccessCode;
 };
-
-/**
- * Sendet den Zugangscode per E-Mail über die Supabase Edge Function "send-access-code".
- * Erwartet ein Body-Objekt: { access_code_id: number }
- */
-export const sendAccessCodeEmail = async (accessCodeId: number): Promise<void> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const { data, error } = await supabase.functions.invoke('send-access-code', {
-    body: { access_code_id: accessCodeId },
-  });
-
-  if (error) {
-    console.error('Fehler beim Aufruf der Edge Function send-access-code:', error);
-    throw new Error(error.message || 'E-Mail konnte nicht gesendet werden.');
-  }
-
-  // Edge Function liefert { ok: true } oder { ok: false, error: ... }
-  if (data && data.ok === false) {
-    throw new Error(data.error || 'E-Mail konnte nicht gesendet werden.');
-  }
-};
-
-/**
- * Self-Service: Fordert den Zugangscode per E-Mail an (Code vergessen?).
- * Ruft die Supabase Edge Function "request-access-code" auf.
- * Wichtig: Die Antwort ist bewusst neutral, um nicht preiszugeben, ob die E-Mail existiert.
- */
-export const requestAccessCodeByEmail = async (email: string): Promise<void> => {
-  if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
-
-  const normalizedEmail = (email || '').trim().toLowerCase();
-  if (!normalizedEmail) return;
-
-  const { data, error } = await supabase.functions.invoke('request-access-code', {
-    body: { email: normalizedEmail },
-  });
-
-  // Neutral nach außen: wir werfen nur bei echten technischen Fehlern,
-  // die UI zeigt trotzdem eine neutrale Erfolgsmeldung.
-  if (error) {
-    console.error('Fehler beim Aufruf der Edge Function request-access-code:', error);
-    throw new Error(error.message || 'Anforderung konnte nicht gesendet werden.');
-  }
-  if (data && data.ok === false) {
-    // Edge Function kann optional ok:false liefern; trotzdem neutral behandeln
-    console.error('Edge Function request-access-code meldet Fehler:', data);
-    throw new Error(data.error || 'Anforderung konnte nicht gesendet werden.');
-  }
-};
-
-
 
 /**
  * Löscht einen Zugangscode aus der Datenbank.
@@ -372,31 +301,13 @@ export const validateAdminCredentials = async (username: string, password: strin
  * Überschreibt eine vorhandene Datei, um sicherzustellen, dass immer nur die neueste Version verfügbar ist.
  * @param file Die PDF-Datei, die hochgeladen werden soll.
  */
-
-export const createSignedLearningGuideUrl = async (): Promise<{ signedUrl: string | null; error: Error | null }> => {
-  try {
-    const { data, error } = await supabase
-      .storage
-      .from('learning_materials')
-      .createSignedUrl('studienleitfaden.pdf', 60);
-
-    if (error) {
-      return { signedUrl: null, error: new Error(error.message) };
-    }
-
-    return { signedUrl: data?.signedUrl || null, error: null };
-  } catch (e: any) {
-    return { signedUrl: null, error: e instanceof Error ? e : new Error(String(e)) };
-  }
-};
-
 export const uploadLearningGuide = async (file: File): Promise<void> => {
   if (!supabase) throw new Error("Supabase-Client nicht initialisiert.");
 
   const { data, error } = await supabase.storage
     .from('learning_materials')
     .upload('studienleitfaden.pdf', file, {
-      cacheControl: '0',
+      cacheControl: '3600',
       upsert: true, // Überschreibt die Datei, falls sie bereits existiert
     });
 

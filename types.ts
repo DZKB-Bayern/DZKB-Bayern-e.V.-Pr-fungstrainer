@@ -6,7 +6,6 @@ export interface Question {
   correctAnswerIndices: number[];
   category?: string | null;
   type?: string | null;
-  verband?: 'DZKB' | 'ProHunde' | null;
   imageUrl?: string | null;
 }
 
@@ -15,10 +14,5 @@ export interface AccessCode {
   created_at: string;
   code: string;
   student_name: string | null;
-  email: string;
   is_active: boolean;
-
-  sent_at?: string | null;
-  send_status?: string | null;
-  send_error?: string | null;
 }
