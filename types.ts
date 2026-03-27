@@ -6,6 +6,7 @@ export interface Question {
   correctAnswerIndices: number[];
   category?: string | null;
   type?: string | null;
+  verband?: 'DZKB' | 'ProHunde' | null;
   imageUrl?: string | null;
 }
 
