@@ -219,6 +219,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     try {
       await uploadLearningGuide(guideFile);
       showSuccessMessage("Studienleitfaden erfolgreich hochgeladen!");
+      // Cache-Busting: neue Version merken, damit der öffentliche Link sofort die neue Datei lädt
+      try {
+        localStorage.setItem('guideVersion', String(Date.now()));
+      } catch (_) {
+        // ignore
+      }
       setGuideFile(null);
     } catch (err: any) {
       setError(err.message || "Fehler beim Hochladen des Leitfadens.");
