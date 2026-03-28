@@ -14,7 +14,6 @@ import { fetchRandomQuestions } from './services/supabaseService';
 
 type GameState = 'config' | 'quiz' | 'results';
 type View = 'user' | 'admin_login' | 'admin_panel';
-export type Verband = 'DZKB' | 'ProHunde';
 
 // Hilfsfunktion zur Normalisierung von Texten, um HTML-Entitäten und falsche Zeilenumbrüche zu korrigieren.
 const normalizeText = (text: string | null | undefined): string => {

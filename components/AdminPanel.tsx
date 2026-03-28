@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { saveQuestions, fetchAllQuestions, deleteQuestion, updateQuestion, createQuestion, deleteMultipleQuestions, uploadLearningGuide } from '../services/supabaseService';
 import { Question } from '../types';
-import { Verband } from '../App';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -15,7 +14,7 @@ interface AdminPanelProps {
 }
 
 type SortDirection = 'asc' | 'desc';
-type SortableKeys = 'questionText' | 'type' | 'category' | 'verband';
+type SortableKeys = 'questionText' | 'type' | 'category';
 type AdminView = 'questions' | 'accessCodes';
 
 interface SortConfig {
@@ -57,7 +56,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
 
   // State for file import
   const [file, setFile] = useState<File | null>(null);
-  const [uploadVerband, setUploadVerband] = useState<Verband | ''>('');
   const [isImporting, setIsImporting] = useState(false);
   
   // State for question management
@@ -65,7 +63,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [verbandFilter, setVerbandFilter] = useState<'all' | Verband>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Single' | 'Multi'>('all');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
@@ -124,7 +121,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   };
 
   const handleImportCSV = useCallback(async () => {
-    if (!file || !uploadVerband) return;
+    if (!file) return;
 
     const fileName = file.name.toLowerCase();
     if (file.type !== 'text/csv' && !fileName.endsWith('.csv')) {
@@ -176,7 +173,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                 correctAnswerIndices,
                 category: normalizeText(row['Kategorie'] || 'Allgemein'),
                 type: String(row['Fragetyp']).startsWith('Single') ? 'Single' : 'Multi',
-                verband: uploadVerband,
             };
             allParsedQuestions.push(question);
         }
@@ -190,14 +186,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
         showSuccessMessage(`${allParsedQuestions.length} Fragen erfolgreich importiert!`);
         fetchQuestions();
         setFile(null);
-        setUploadVerband('');
 
     } catch (err: any) {
         setError(err.message || "Ein unbekannter Fehler ist aufgetreten.");
     } finally {
         setIsImporting(false);
     }
-  }, [file, fetchQuestions, uploadVerband]);
+  }, [file, fetchQuestions]);
 
   // Learning Guide Upload Logic
   const handleGuideFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,7 +230,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
 
   // Question Management Logic
   const handleOpenEditModal = (question?: Question) => {
-    setEditingQuestion(question || { questionText: '', options: ['', '', '', ''], correctAnswerIndices: [0], category: 'Hundeführerschein', type: 'Single', verband: 'DZKB', imageUrl: '' });
+    setEditingQuestion(question || { questionText: '', options: ['', '', '', ''], correctAnswerIndices: [0], category: 'Hundeführerschein', type: 'Single', imageUrl: '' });
     setIsEditModalOpen(true);
   };
 
@@ -296,7 +291,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
       Frage: q.questionText,
       Typ: formatQuestionType(q.type),
       Kategorie: q.category,
-      Verband: q.verband,
       Antwort_A: q.options[0],
       Antwort_B: q.options[1],
       Antwort_C: q.options[2],
@@ -316,12 +310,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     
     autoTable(doc, {
         startY: 30,
-        head: [['Nr.', 'Frage', 'Kategorie', 'Verband', 'Korrekte Antwort(en)']],
+        head: [['Nr.', 'Frage', 'Kategorie', 'Korrekte Antwort(en)']],
         body: filteredAndSortedQuestions.map((q, index) => [
             index + 1,
             q.questionText,
             q.category,
-            q.verband,
             q.correctAnswerIndices.map(i => q.options[i]).join('; ')
         ]),
         styles: { overflow: 'linebreak', cellWidth: 'wrap', font: 'helvetica', fontSize: 8 },
@@ -330,8 +323,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
             0: { cellWidth: 10 },
             1: { cellWidth: 'auto' },
             2: { cellWidth: 30 },
-            3: { cellWidth: 20 },
-            4: { cellWidth: 40 }
+            3: { cellWidth: 40 }
         }
     });
 
@@ -351,12 +343,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
   const filteredAndSortedQuestions = useMemo(() => {
     let questions = allQuestions.filter(q => {
       const matchesCategory = categoryFilter === 'all' || q.category === categoryFilter;
-      const matchesVerband = verbandFilter === 'all' || q.verband === verbandFilter;
       const matchesType = typeFilter === 'all' || formatQuestionType(q.type) === typeFilter;
       const matchesSearch = searchTerm === '' || 
         q.questionText.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.options.some(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesCategory && matchesSearch && matchesVerband && matchesType;
+      return matchesCategory && matchesSearch && matchesType;
     });
 
     if (sortConfig.key !== null) {
@@ -373,7 +364,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     }
 
     return questions;
-  }, [allQuestions, searchTerm, categoryFilter, verbandFilter, typeFilter, sortConfig, formatQuestionType]);
+  }, [allQuestions, searchTerm, categoryFilter, typeFilter, sortConfig, formatQuestionType]);
 
   const handleSelectOne = (questionId: number) => {
     setSelectedQuestionIds(prev => {
@@ -411,11 +402,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     showSuccessMessage(`${ids.length} Fragen nach Kategorie '${categoryFilter}' zur Auswahl hinzugefügt.`);
   };
 
-  const handleSelectByVerband = () => {
-    const ids = allQuestions.filter(q => q.verband === verbandFilter).map(q => q.id!);
-    setSelectedQuestionIds(prev => new Set([...prev, ...ids]));
-    showSuccessMessage(`${ids.length} Fragen nach Verband '${verbandFilter}' zur Auswahl hinzugefügt.`);
-  };
 
   const handleSelectByType = () => {
     const ids = allQuestions.filter(q => formatQuestionType(q.type) === typeFilter).map(q => q.id!);
@@ -504,31 +490,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               
               <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Daten Import</h2>
-                <p className="text-sm text-gray-600 mb-4">Laden Sie eine CSV-Datei hoch und wählen Sie den zugehörigen Verband.</p>
+                <p className="text-sm text-gray-600 mb-4">Laden Sie eine CSV-Datei hoch, um Fragen zu importieren.</p>
                 <div className="flex items-center space-x-4">
                   <input type="file" onChange={handleFileChange} accept=".csv" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#0B79D0]/10 file:text-[#0B79D0] hover:file:bg-[#0B79D0]/20"/>
                 </div>
-                 {file && (
-                  <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Verband für Import auswählen:</p>
-                    <div className="flex gap-4">
-                        {(['DZKB', 'ProHunde'] as const).map(v => (
-                            <label key={v} className="flex items-center">
-                                <input
-                                    type="radio"
-                                    name="uploadVerband"
-                                    value={v}
-                                    checked={uploadVerband === v}
-                                    onChange={() => setUploadVerband(v)}
-                                    className="h-4 w-4 text-[#0B79D0] focus:ring-[#0B79D0]"
-                                />
-                                <span className="ml-2 text-gray-700">{v}</span>
-                            </label>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                {file && <button onClick={handleImportCSV} disabled={isImporting || !uploadVerband} className="mt-4 w-full bg-[#0B79D0] text-white font-bold py-2 px-5 rounded-lg hover:bg-[#0968b4] transition-colors disabled:bg-gray-400">
+                {file && <button onClick={handleImportCSV} disabled={isImporting} className="mt-4 w-full bg-[#0B79D0] text-white font-bold py-2 px-5 rounded-lg hover:bg-[#0968b4] transition-colors disabled:bg-gray-400">
                   {isImporting ? 'Importiere...' : `"${file.name}" importieren`}
                 </button>}
               </div>
@@ -562,16 +528,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               
                {/* Filters and Selection Tools */}
               <div className="border-t border-b border-gray-200 py-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {/* Filters */}
                       <input type="text" placeholder="Suche..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 border rounded-lg w-full bg-white text-gray-900"/>
                       <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="p-2 border rounded-lg bg-white text-gray-900">
                         {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'Alle Kategorien' : cat}</option>)}
-                      </select>
-                      <select value={verbandFilter} onChange={e => setVerbandFilter(e.target.value as 'all' | Verband)} className="p-2 border rounded-lg bg-white text-gray-900">
-                          <option value="all">Alle Verbände</option>
-                          <option value="DZKB">DZKB</option>
-                          <option value="ProHunde">ProHunde</option>
                       </select>
                       <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as 'all' | 'Single' | 'Multi')} className="p-2 border rounded-lg bg-white text-gray-900">
                           <option value="all">Alle Typen</option>
@@ -584,9 +545,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                       <div className="flex flex-wrap gap-2">
                           <button onClick={handleSelectByCategory} disabled={categoryFilter === 'all'} className="text-sm bg-blue-100 text-blue-800 font-medium py-1 px-3 rounded-full disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
                               Alle in Kategorie '{categoryFilter}' markieren
-                          </button>
-                          <button onClick={handleSelectByVerband} disabled={verbandFilter === 'all'} className="text-sm bg-blue-100 text-blue-800 font-medium py-1 px-3 rounded-full disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
-                              Alle in Verband '{verbandFilter}' markieren
                           </button>
                            <button onClick={handleSelectByType} disabled={typeFilter === 'all'} className="text-sm bg-blue-100 text-blue-800 font-medium py-1 px-3 rounded-full disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
                               Alle vom Typ '{typeFilter}' markieren
@@ -626,14 +584,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                         <th className="p-2 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('category')}>
                           <div className="flex items-center">Kategorie <SortIndicator columnKey="category" /></div>
                         </th>
-                        <th className="p-2 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('verband')}>
-                          <div className="flex items-center">Verband <SortIndicator columnKey="verband" /></div>
-                        </th>
                       <th className="p-2">Aktionen</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoadingQuestions ? (<tr><td colSpan={8} className="text-center p-4">Lade Fragen...</td></tr>) 
+                    {isLoadingQuestions ? (<tr><td colSpan={7} className="text-center p-4">Lade Fragen...</td></tr>) 
                     : filteredAndSortedQuestions.map((q, index) => {
                       const formattedType = formatQuestionType(q.type);
                       return (
@@ -655,7 +610,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                             </span>
                           </td>
                           <td className="p-2">{q.category || 'N/A'}</td>
-                          <td className="p-2">{q.verband || 'N/A'}</td>
                           <td className="p-2 flex gap-4">
                             <button onClick={() => handleOpenEditModal(q)} className="text-[#0B79D0] font-semibold">Edit</button>
                             <button onClick={() => handleDeleteRequest(q)} className="text-red-500 font-semibold">Delete</button>
@@ -763,7 +717,7 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ isOpen, onClose, 
               <label className="block text-sm font-medium text-gray-700">Bild-URL (Optional)</label>
               <input type="text" name="imageUrl" value={editedQuestion.imageUrl || ''} onChange={handleTextChange} placeholder="https://example.com/image.png" className="w-full p-2 border rounded mt-1 bg-gray-50 text-gray-900"/>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Kategorie</label>
               <input type="text" name="category" value={editedQuestion.category || ''} onChange={handleTextChange} className="w-full p-2 border rounded mt-1 bg-gray-50 text-gray-900"/>
@@ -774,13 +728,6 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ isOpen, onClose, 
                   <option value="Single">Single</option>
                   <option value="Multi">Multi</option>
               </select>
-            </div>
-             <div>
-                <label className="block text-sm font-medium text-gray-700">Verband</label>
-                <select name="verband" value={editedQuestion.verband || ''} onChange={handleTextChange} className="w-full p-2 border rounded mt-1 bg-white text-gray-900">
-                    <option value="DZKB">DZKB</option>
-                    <option value="ProHunde">ProHunde</option>
-                </select>
             </div>
           </div>
           <div>
