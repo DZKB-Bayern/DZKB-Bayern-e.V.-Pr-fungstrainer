@@ -402,7 +402,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
     showSuccessMessage(`${ids.length} Fragen nach Kategorie '${categoryFilter}' zur Auswahl hinzugefügt.`);
   };
 
-
   const handleSelectByType = () => {
     const ids = allQuestions.filter(q => formatQuestionType(q.type) === typeFilter).map(q => q.id!);
     setSelectedQuestionIds(prev => new Set([...prev, ...ids]));
@@ -528,7 +527,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
               
                {/* Filters and Selection Tools */}
               <div className="border-t border-b border-gray-200 py-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Filters */}
                       <input type="text" placeholder="Suche..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 border rounded-lg w-full bg-white text-gray-900"/>
                       <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="p-2 border rounded-lg bg-white text-gray-900">
@@ -588,7 +587,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoadingQuestions ? (<tr><td colSpan={7} className="text-center p-4">Lade Fragen...</td></tr>) 
+                    {isLoadingQuestions ? (<tr><td colSpan={8} className="text-center p-4">Lade Fragen...</td></tr>) 
                     : filteredAndSortedQuestions.map((q, index) => {
                       const formattedType = formatQuestionType(q.type);
                       return (
@@ -717,7 +716,7 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ isOpen, onClose, 
               <label className="block text-sm font-medium text-gray-700">Bild-URL (Optional)</label>
               <input type="text" name="imageUrl" value={editedQuestion.imageUrl || ''} onChange={handleTextChange} placeholder="https://example.com/image.png" className="w-full p-2 border rounded mt-1 bg-gray-50 text-gray-900"/>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Kategorie</label>
               <input type="text" name="category" value={editedQuestion.category || ''} onChange={handleTextChange} className="w-full p-2 border rounded mt-1 bg-gray-50 text-gray-900"/>
